@@ -1,0 +1,12 @@
+{
+  "info": {
+    "gameover": {
+      "address": 88,
+      "type": "<d2"
+    },
+    "score": {
+      "address": 82,
+      "type": ">d2"
+    }
+  }
+}
