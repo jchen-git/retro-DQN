@@ -10,7 +10,6 @@ gym-retro==0.8.0
 importlib-metadata==8.5.0
 importlib-resources==6.4.5
 jinja2==3.1.4
-keyboard==0.13.5
 kiwisolver==1.4.7
 MarkupSafe==2.1.5
 matplotlib==3.7.5
@@ -20,9 +19,7 @@ numpy==1.24.4
 opencv-python==4.10.0.84
 packaging==24.1
 pillow==10.4.0
-pygame==1.9.6
 pyglet==1.5.29
-pynput==1.7.7
 pyparsing==3.1.4
 python-dateutil==2.9.0.post0
 PyYAML==6.0.2
