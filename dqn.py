@@ -29,6 +29,3 @@ class DQN(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
-
-    def feature_size(self):
-        return self.features(autograd.Variable(torch.zeros(1, *self.input_shape))).view(1, -1).size(1)
