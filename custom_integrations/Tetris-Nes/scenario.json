@@ -1,18 +1,45 @@
 {
   "done": {
-    "condition": "all",
+    "condition": "any",
     "variables": {
       "gameover": {
         "op": "equal",
         "reference": 14
-      }
-    }
+      },
+	  "I": {
+		"op": "equal",
+		"reference": 10
+	  }
+	}
   },
   "reward": {
     "variables": {
       "score": {
-        "reward": 1.0
+        "reward": 2
+      },
+	  "T": {
+        "reward": 1
+      },
+	  "Z": {
+        "reward": 1
+      },
+	  "O": {
+        "reward": 1
+      },
+	  "S": {
+        "reward": 1
+      },
+	  "L": {
+        "reward": 1
+      },
+	  "I": {
+        "reward": 1
       }
     }
+  },
+  "penalty": {
+	"gameover": {
+		"penalty": 10
+	}
   }
 }

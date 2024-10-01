@@ -1,12 +1,36 @@
 {
   "info": {
+    "I": {
+      "address": 1019,
+      "type": ">u2"
+    },
+    "L": {
+      "address": 1018,
+      "type": "<d2"
+    },
     "gameover": {
       "address": 88,
+      "type": "<d2"
+    },
+    "O": {
+      "address": 1014,
+      "type": "<d2"
+    },
+    "S": {
+      "address": 1016,
       "type": "<d2"
     },
     "score": {
       "address": 82,
       "type": ">d2"
+    },
+    "T": {
+      "address": 1009,
+      "type": ">d2"
+    },
+    "Z": {
+      "address": 1012,
+      "type": "<u2"
     }
   }
 }

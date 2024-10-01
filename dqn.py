@@ -18,7 +18,7 @@ class DQN(nn.Module):
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(49, hidden_dim),
+            nn.Linear(16, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, actions_dim)
         )
