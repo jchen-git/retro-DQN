@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from torch import nn
 from dqn import DQN
 from exp_replay import ReplayMemory
-from preprocessing import preprocess
+from preprocessing import preprocess, stack_frame
 
 # Action Space = ['B', None, 'SELECT', 'START', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'A']
 
@@ -62,28 +62,32 @@ class Agent:
         self.optimizer = None
 
         if training:
-            self.replay_memory = ReplayMemory(self.replay_memory_size)
+            self.replay_memory = ReplayMemory(self.replay_memory_size, self.batch_size, device)
 
-            self.target_net = DQN(input_shape=self.input_shape, actions_dim=self.n_actions).to(device)
+            self.target_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
             self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
 
-    def optimize(self, batch, policy_net, target_net):
-        for curr_state, act, new_state, reward, terminated in batch:
-            if terminated:
-                target = reward
-            else:
-                with torch.no_grad():
-                    target_q = reward + self.discount_factor * target_net(new_state).max()
+    def optimize(self, mini_batch):
+        states, actions, rewards, next_states, dones = mini_batch
 
-            current_q = policy_net(curr_state)
+        # Get expected Q values from policy model
+        q_expected_current = self.policy_net(states)
+        q_expected = q_expected_current.gather(1, actions.unsqueeze(1)).squeeze(1)
 
-            loss = self.loss_fn(current_q, target_q)
+        # Get max predicted Q values (for next states) from target model
+        q_targets_next = self.target_net(next_states).detach().max(1)[0]
 
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+        # Compute Q targets for current states
+        q_targets = rewards + (self.discount_factor * q_targets_next * (1 - dones))
+
+        # Compute loss
+        loss = self.loss_fn(q_expected, q_targets)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
     def act(self, curr_state, action_space):
         observation = torch.from_numpy(curr_state).unsqueeze(0).to(device)
@@ -94,9 +98,15 @@ class Agent:
 
         # Epsilon-greedy action selection
         if random.random() < self.epsilon:
-            return self.actions[int(np.unravel_index(torch.argmax(action_values), action_values.shape)[1])]
+            return np.unravel_index(torch.argmax(action_values), action_values.shape)[1]
         else:
-            return action_space.sample()
+            return random.choice(np.arange(self.n_actions))
+
+def stack_frames(frames, curr_state, image_crop, image_size, is_new=False):
+    frame = preprocess(curr_state, image_crop, image_size)
+    frames = stack_frame(frames, frame, is_new)
+
+    return frames
 
 if __name__ == "__main__":
     # if GPU is to be used
@@ -114,9 +124,10 @@ if __name__ == "__main__":
 
     # TODO
     # Rename this variable
-    INPUT_SHAPE = (35, 204, 85, 170)
+    #INPUT_SHAPE = (35, 204, 85, 170)
+    INPUT_SHAPE = (1, 64, 64)
 
-    agent = Agent((1, INPUT_SHAPE, INPUT_SHAPE), num_actions,"tetris", training=True)
+    agent = Agent(INPUT_SHAPE, num_actions,"tetris", training=True)
     is_training = True
     rewards_per_episode = []
     epsilon_history = []
@@ -130,21 +141,23 @@ if __name__ == "__main__":
         done = False
         episode_reward = 0.0
 
-        state = preprocess(obs, agent.image_crop, agent.image_resize)
+        state = stack_frames(None, obs, agent.image_crop, agent.image_resize, True)
 
         while not done:
             env.render()
             action = agent.act(state, env.action_space)
-            next_obs, rew, done, info = env.step(action)
+            next_obs, rew, done, info = env.step(agent.actions[int(action)])
             episode_reward += rew
-            state = preprocess(next_obs, agent.image_crop, agent.image_resize)
+            next_state = stack_frames(state, next_obs, agent.image_crop, agent.image_resize, False)
 
             print(episode_reward)
 
             if is_training:
-                agent.replay_memory.append((obs, action, next_obs, rew, done))
+                agent.replay_memory.append(state, action, rew, next_state, done)
 
                 step_count += 1
+
+            state = next_state
 
         rewards_per_episode.append(episode_reward)
 
@@ -152,9 +165,9 @@ if __name__ == "__main__":
         epsilon_history.append(agent.epsilon)
 
         if (len(agent.replay_memory)) > agent.batch_size:
-            batch = agent.replay_memory.sample(agent.batch_size)
+            batch = agent.replay_memory.sample()
 
-            agent.optimize(batch, agent.policy_net, agent.target_net)
+            agent.optimize(batch)
 
             if step_count > agent.network_sync_rate:
                 agent.target_net.load_state_dict(agent.policy_net.state_dict())
