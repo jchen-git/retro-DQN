@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.autograd as autograd
-import torch.nn.functional as F
 
 class DQN(nn.Module):
     def __init__(self, input_shape, actions_dim, hidden_dim=256):

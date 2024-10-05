@@ -9,17 +9,11 @@ def preprocess(screen, crop, output):
     screen = cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
 
     # Crop screen
-    screen = screen[1:-1, 1:-1]
+    screen = screen[crop[0]:crop[1], crop[2]:crop[3]]
 
     # Convert to float, and normalized
     screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
 
     # Resize image
     screen = cv2.resize(screen, (output, output), interpolation=cv2.INTER_AREA)
-    return screen
-
-
-def stack_frame(stacked_frames, frame, is_new):
-    stacked_frames = np.stack(arrays=[frame])
-
-    return stacked_frames
+    return np.stack(arrays=[screen])

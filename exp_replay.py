@@ -17,20 +17,18 @@ class ReplayMemory(object):
             random.seed(seed)
 
     def append(self, state, action, reward, next_state, done):
-        """Save a transition"""
         e = self.transition(state, action, reward, next_state, done)
         self.memory.append(e)
 
     def sample(self):
-        """Randomly sample a batch of experiences from memory."""
-        experiences = random.sample(self.memory, k=self.batch_size)
+        transitions = random.sample(self.memory, k=self.batch_size)
 
-        states = torch.from_numpy(np.array([e.state for e in experiences if e is not None])).float().to(self.device)
-        actions = torch.from_numpy(np.array([e.action for e in experiences if e is not None])).long().to(self.device)
-        rewards = torch.from_numpy(np.array([e.reward for e in experiences if e is not None])).float().to(self.device)
-        next_states = torch.from_numpy(np.array([e.next_state for e in experiences if e is not None])).float().to(
+        states = torch.tensor(np.array([t.state for t in transitions if t is not None])).float().to(self.device)
+        actions = torch.tensor(np.array([t.action for t in transitions if t is not None])).long().to(self.device)
+        rewards = torch.tensor(np.array([t.reward for t in transitions if t is not None])).float().to(self.device)
+        next_states = torch.tensor(np.array([t.next_state for t in transitions if t is not None])).float().to(
             self.device)
-        dones = torch.from_numpy(np.array([e.done for e in experiences if e is not None]).astype(np.uint8)).float().to(
+        dones = torch.tensor(np.array(np.array([t.done for t in transitions if t is not None])).astype(np.uint8)).float().to(
             self.device)
 
         return states, actions, rewards, next_states, dones
