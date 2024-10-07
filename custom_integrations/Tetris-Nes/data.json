@@ -4,12 +4,12 @@
       "address": 1019,
       "type": ">u2"
     },
-    "L": {
-      "address": 1018,
+    "J": {
+      "address": 1010,
       "type": "<d2"
     },
-    "gameover": {
-      "address": 88,
+    "L": {
+      "address": 1018,
       "type": "<d2"
     },
     "O": {
@@ -20,10 +20,6 @@
       "address": 1016,
       "type": "<d2"
     },
-    "score": {
-      "address": 82,
-      "type": ">d2"
-    },
     "T": {
       "address": 1009,
       "type": ">d2"
@@ -31,6 +27,22 @@
     "Z": {
       "address": 1012,
       "type": "<u2"
+    },
+    "down_hold_timer": {
+      "address": 79,
+      "type": "|u1"
+    },
+    "gameover": {
+      "address": 88,
+      "type": "<d2"
+    },
+    "score": {
+      "address": 82,
+      "type": ">d2"
+    },
+    "y_pos_curr_piece": {
+      "address": 174,
+      "type": "|u1"
     }
   }
 }

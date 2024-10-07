@@ -1,8 +1,11 @@
 # TODO
 # Implement DQN to Gym Environment
 import random
+
+import matplotlib
 import torch
 import yaml
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from torch import nn
@@ -14,12 +17,20 @@ from exp_replay import ReplayMemory
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Set path for logging
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+matplotlib.use('Agg')
+
 class Agent:
     def __init__(self, input_shape, n_actions, hyperparameter_set, training=False):
         # Get hyperparameters from yaml file in current directory
         with open('hyperparameters.yaml', 'r') as file:
             all_hyperparam_sets = yaml.safe_load(file)
             hyperparam = all_hyperparam_sets[hyperparameter_set]
+
+        self.hyperparameter_set = hyperparameter_set
 
         self.hidden_layer_num = hyperparam['hidden_layers']        # Number of hidden layers to use for linear nn layers
         self.replay_memory_size = hyperparam['replay_memory_size'] # Size of replay memory
@@ -60,6 +71,10 @@ class Agent:
         self.loss_fn = nn.MSELoss()
         self.optimizer = None
 
+        self.LOG_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.log')
+        self.MODEL_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.pt')
+        self.GRAPH_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.png')
+
         if training:
             self.replay_memory = ReplayMemory(self.replay_memory_size, self.batch_size, device)
 
@@ -99,6 +114,6 @@ class Agent:
 
         # Epsilon-greedy action selection
         if random.random() < self.epsilon:
-            return np.unravel_index(torch.argmax(action_values), action_values.shape)[1]
+            return np.unravel_index(torch.argmax(action_values.cpu()), action_values.shape)[1]
         else:
             return random.choice(np.arange(self.n_actions))

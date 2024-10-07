@@ -1,10 +1,9 @@
-pip==21.0
-wheel==0.38.0
 gym==0.21.0
 gym-retro==0.8.0
 matplotlib==3.7.5
 numpy==1.24.4
 opencv-python==4.10.0.84
 PyYAML==6.0.2
-torch==2.4.1
 PyQt6==6.7.1
+torch~=2.4.1+cu124
+PyQt6-sip~=13.8.0
