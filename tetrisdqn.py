@@ -27,7 +27,6 @@ matplotlib.use('Agg')
 
 env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
 #env = gym.make("CartPole-v1")
-#env = retro.make("Airstriker-Genesis")
 num_actions = env.action_space.n
 
 #IMAGE_CROP = (35, 204, 85, 170)
@@ -35,6 +34,7 @@ IMAGE_CROP = (1, -1, 1, -1)
 INPUT_SHAPE = (3, 92, 92)
 
 agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
+#agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
 is_training = True
 rewards_per_episode = []
 epsilon_history = []
@@ -42,7 +42,7 @@ step_count = 0
 best_reward = -1.0
 best_reward_episodes = []
 
-#agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
+agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
 
 log_message=f"{datetime.now()}: Training..."
 print(log_message)
@@ -57,6 +57,7 @@ for episode in range(agent.epoch):
     episode_reward = 0.0
 
     frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
+    #frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
     state = stack_frame(None, frame, True)
 
     # See frame after preprocessing
@@ -66,11 +67,13 @@ for episode in range(agent.epoch):
     # plt.show()
 
     while not done:
-        env.render()
+        #env.render()
         action = agent.act(state)
         next_obs, rew, done, info = env.step(agent.actions[int(action)])
+        #next_obs, rew, done, info = env.step(agent.actions[int(action)][0])
         episode_reward += rew
         frame = preprocess(next_obs, IMAGE_CROP, agent.image_resize)
+        #frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
         next_state = stack_frame(state, frame, False)
 
         if is_training:

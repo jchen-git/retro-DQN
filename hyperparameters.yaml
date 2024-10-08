@@ -9,7 +9,7 @@ cart:
   network_sync_rate: 10
   learning_rate: 0.0001
   discount_factor: 0.99
-  epoch: 10000
+  epoch: 1000
 
 tetris:
   env_id: Tetris-Nes

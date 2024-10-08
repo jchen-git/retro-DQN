@@ -84,7 +84,7 @@ class Agent:
             self.target_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
-            self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
+            self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate)
 
     # Calculate the Q targets for the current states and run the selected optimizer
     def optimize(self, mini_batch):
