@@ -16,4 +16,16 @@ def preprocess(screen, crop, output):
 
     # Resize image
     screen = cv2.resize(screen, (output, output), interpolation=cv2.INTER_AREA)
-    return np.stack(arrays=[screen])
+    return screen
+
+
+def stack_frame(stacked_frames, frame, is_new):
+    if is_new:
+        stacked_frames = np.stack(arrays=[frame, frame, frame])
+        stacked_frames = stacked_frames
+    else:
+        stacked_frames[0] = stacked_frames[1]
+        stacked_frames[1] = stacked_frames[2]
+        stacked_frames[2] = frame
+
+    return stacked_frames

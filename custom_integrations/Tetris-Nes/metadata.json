@@ -1,5 +1,5 @@
 {
-  "default_state": "level9",
+  "default_state": "level9_1",
   "whitelist": {
     "data.json": [
       "suspicious type >u2 for lives"

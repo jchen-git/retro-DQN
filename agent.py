@@ -21,8 +21,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
-matplotlib.use('Agg')
-
 class Agent:
     def __init__(self, input_shape, n_actions, hyperparameter_set, training=False):
         # Get hyperparameters from yaml file in current directory
@@ -45,7 +43,7 @@ class Agent:
 
         self.input_shape = input_shape
         self.n_actions = n_actions
-        self.image_resize = 64
+        self.image_resize = 92
         self.actions = {
             # B
             0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -66,6 +64,11 @@ class Agent:
             # A
             8: [0, 0, 0, 0, 0, 0, 0, 0, 1]
         }
+        # self.actions = {
+        #     0: [0],
+        #     1: [1],
+        #     2: [2]
+        # }
         self.policy_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
 
         self.loss_fn = nn.MSELoss()

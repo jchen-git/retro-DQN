@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.autograd as autograd
 
 class DQN(nn.Module):
-    def __init__(self, input_shape, actions_dim, hidden_dim=256):
+    def __init__(self, input_shape, actions_dim, hidden_dim):
         super(DQN, self).__init__()
         self.input_shape = input_shape
         self.num_actions = actions_dim
