@@ -9,12 +9,15 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from torch import nn
-from triton.language import dtype
+from collections import namedtuple
 
 from dqn import DQN
 from exp_replay import ReplayMemory
 
 # Action Space = ['B', None, 'SELECT', 'START', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'A']
+
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'reward', 'next_state'))
 
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,7 +48,7 @@ class Agent:
 
         self.input_shape = input_shape
         self.n_actions = n_actions
-        #self.image_resize = input_shape[1]
+        self.image_resize = input_shape[1]
         self.actions = {
             # B
             0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -68,7 +71,7 @@ class Agent:
         }
         self.policy_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
 
-        self.loss_fn = nn.SmoothL1Loss()
+        self.loss_fn = nn.MSELoss()
 
         self.LOG_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.log')
         self.MODEL_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.pt')
@@ -80,44 +83,59 @@ class Agent:
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
 
-        self.TAU = 0.001
+        self.TAU = 0.005
 
     # Calculate the Q targets for the current states and run the selected optimizer
-    def optimize(self, mini_batch):
-        states, actions, rewards, next_states, dones = mini_batch
+    def optimize(self):
+        transitions = self.replay_memory.sample()
+        batch = Transition(*zip(*transitions))
 
-        # Expected Q values using the policy network
-        q = self.policy_net(states)
-        current_q = q.gather(1, actions.unsqueeze(1)).squeeze(1)
+        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                                batch.next_state)), device=device, dtype=torch.bool)
+        non_final_next_states = torch.cat([s for s in batch.next_state
+                                           if s is not None])
+        states = torch.cat(batch.state)
+        actions = torch.cat(batch.action)
+        rewards = torch.cat(batch.reward)
 
+        next_states = torch.zeros(self.batch_size, device=device)
         with torch.no_grad():
-            next_state_q = self.target_net(next_states).max(1)[0]
+            next_states[non_final_mask] = self.target_net(non_final_next_states).max(1).values
+        # Compute the expected Q values
+        expected_state_action_values = (next_states * self.gamma) + rewards
 
-        # Compute Q targets
-        target_q = rewards + (self.gamma * next_state_q * (1 - dones))
+        # # Expected Q values using the policy network
+        current_q = self.policy_net(states).gather(1, actions)
+
+        # with torch.no_grad():
+        #     next_state_q = self.target_net(next_states).max(1)[0]
+        #
+        # # Compute Q targets
+        # target_q = rewards + (self.gamma * next_state_q)
 
         # Compute loss
-        loss = self.loss_fn(current_q, target_q)
+        loss = self.loss_fn(current_q, expected_state_action_values.unsqueeze(1))
 
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        #self.soft_update(self.policy_net, self.target_net, self.TAU)
+        self.soft_update()
 
     # Run the input through the policy network
     def act(self, curr_state):
-        observation = torch.Tensor(curr_state).unsqueeze(0).to(device)
-
+        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
         # Epsilon-greedy action selection
         if random.random() > self.epsilon:
             with torch.no_grad():
-                action_values = self.policy_net(observation)
-            return np.argmax(action_values.cpu().data.numpy())
+                return self.policy_net(curr_state).max(1).indices.view(1, 1)
         else:
-            return random.choice(np.arange(self.n_actions))
+            return torch.tensor([[random.choice(np.arange(self.n_actions))]], device=device, dtype=torch.long)
 
-    def soft_update(self, policy_model, target_model, tau):
-        for target_param, policy_param in zip(target_model.parameters(), policy_model.parameters()):
-            target_param.data.copy_(tau * policy_param.data + (1.0 - tau) * target_param.data)
+    def soft_update(self):
+        target_net_state_dict = self.target_net.state_dict()
+        policy_net_state_dict = self.policy_net.state_dict()
+        for key in policy_net_state_dict:
+            target_net_state_dict[key] = policy_net_state_dict[key] * self.TAU + target_net_state_dict[key] * (1 - self.TAU)
+        self.target_net.load_state_dict(target_net_state_dict)

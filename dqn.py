@@ -8,19 +8,19 @@ class DQN(nn.Module):
         self.input_shape = input_shape
         self.num_actions = actions_dim
 
-        # self.features = nn.Sequential(
-        #     nn.Conv2d(input_shape[0], 64, kernel_size=5, stride=3),
-        #     nn.ReLU(),
-        #     nn.Conv2d(64, 64, kernel_size=4, stride=2),
-        #     nn.ReLU(),
-        #     nn.Conv2d(64, 64, kernel_size=3, stride=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(kernel_size=2),
-        #     nn.Flatten()
-        # )
+        self.features = nn.Sequential(
+            nn.Conv2d(input_shape[0], 64, kernel_size=5, stride=3),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Flatten()
+        )
 
         self.fc = nn.Sequential(
-            nn.Linear(input_shape, hidden_dim),
+            nn.Linear(self.feature_size(), hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
@@ -29,8 +29,8 @@ class DQN(nn.Module):
 
     # Determine next action using the ReLU activation function
     def forward(self, x):
-        #x = self.features(x)
-        #x = x.view(x.size(0), -1)
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
 

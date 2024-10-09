@@ -22,23 +22,22 @@ retro.data.Integrations.add_custom_path(
     os.path.join(SCRIPT_DIR, 'custom_integrations')
 )
 
-#env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
-env = gym.make("CartPole-v1")
+env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
+#env = gym.make("CartPole-v1")
 num_actions = env.action_space.n
 
 # CartPole Resolution is (600 x 400)
-#IMAGE_CROP = (35, 204, 85, 170)
-IMAGE_CROP = (150, 350, 200, 400)
+IMAGE_CROP = (35, 204, 85, 170)
+#IMAGE_CROP = (150, 350, 50, 550)
 #IMAGE_CROP = (1, -1, 1, -1)
-#INPUT_SHAPE = (1, 128, 128)
-INPUT_SHAPE = 4
+INPUT_SHAPE = (1, 96, 96)
+#INPUT_SHAPE = 4
 
-#agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
-agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
+agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
+#agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
 is_training = True
 rewards_per_episode = []
 epsilon_history = []
-step_count = 0
 best_reward = -1.0
 best_reward_episodes = []
 
@@ -50,47 +49,45 @@ with open(agent.LOG_FILE, 'w') as file:
     file.write(log_message + '\n')
 
 for episode in range(agent.epoch):
-    #env.load_state(random.choice(SAVE_STATES))
+    env.load_state(random.choice(SAVE_STATES))
     state = env.reset()
 
     done = False
     episode_reward = 0.0
 
-    #frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
-    # frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
-    # state = stack_frame(None, frame, True)
+    frame = preprocess(state, IMAGE_CROP, agent.image_resize)
+    #frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
+    frames = stack_frame(None, frame, True)
+    state = torch.tensor(frames, dtype=torch.float32, device="cuda").unsqueeze(0)
 
     # See frame after preprocessing
     # plt.figure()
-    # plt.imshow(state[0], cmap="gray")
+    # plt.imshow(frames[0], cmap="gray")
     # plt.title('Original Frame')
     # plt.show()
 
     while not done:
-        #env.render()
+        env.render()
         action = agent.act(state)
-        #next_obs, rew, done, info = env.step(agent.actions[int(action)])
-        next_state, rew, done, info = env.step(action)
+        obs, rew, done, info = env.step(agent.actions[action.item()])
+        #obs, rew, done, info = env.step(action.item())
         episode_reward += rew
-        #frame = preprocess(next_obs, IMAGE_CROP, agent.image_resize)
-        # frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
-        # next_state = stack_frame(state, frame, False)
+        frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
+        #frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
+        frames = stack_frame(frames, frame, False)
 
-        if is_training:
-            agent.replay_memory.append(state, action, rew, next_state, done)
+        if done:
+            next_state = None
+        else:
+            next_state = torch.tensor(frames, dtype=torch.float32, device='cuda').unsqueeze(0)
 
-        step_count += 1
+        rew = torch.tensor([rew], device='cuda')
 
-        if step_count > agent.network_sync_rate:
-            if (len(agent.replay_memory)) > agent.batch_size:
-                batch = agent.replay_memory.sample()
+        agent.replay_memory.append(state, action, rew, next_state)
 
-                agent.optimize(batch)
+        if (len(agent.replay_memory)) > agent.batch_size:
+            agent.optimize()
 
-            agent.target_net.load_state_dict(agent.policy_net.state_dict())
-            step_count = 0
-
-        #obs = next_obs
         state = next_state
 
     #print("Reward at end of episode:" + str(episode_reward))
@@ -107,7 +104,6 @@ for episode in range(agent.epoch):
             # Track rewards per episode
     rewards_per_episode.append(episode_reward)
 
-    agent.epsilon = max(agent.epsilon * agent.epsilon_decay, agent.epsilon_min)
     epsilon_history.append(agent.epsilon)
 
 # Save plots
