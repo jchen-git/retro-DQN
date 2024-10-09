@@ -25,16 +25,17 @@ retro.data.Integrations.add_custom_path(
 
 matplotlib.use('Agg')
 
-env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
-#env = gym.make("CartPole-v1")
+#env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
+env = gym.make("CartPole-v1")
 num_actions = env.action_space.n
 
 #IMAGE_CROP = (35, 204, 85, 170)
+#IMAGE_CROP = (150, 350, 1, -1)
 IMAGE_CROP = (1, -1, 1, -1)
-INPUT_SHAPE = (3, 92, 92)
+INPUT_SHAPE = (4, 96, 96)
 
-agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
-#agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
+#agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
+agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
 is_training = True
 rewards_per_episode = []
 epsilon_history = []
@@ -42,7 +43,7 @@ step_count = 0
 best_reward = -1.0
 best_reward_episodes = []
 
-agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
+#agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
 
 log_message=f"{datetime.now()}: Training..."
 print(log_message)
@@ -50,14 +51,14 @@ with open(agent.LOG_FILE, 'a') as file:
     file.write(log_message + '\n')
 
 for episode in range(agent.epoch):
-    env.load_state(random.choice(SAVE_STATES))
+    #env.load_state(random.choice(SAVE_STATES))
     obs = env.reset()
 
     done = False
     episode_reward = 0.0
 
-    frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
-    #frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
+    #frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
+    frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
     state = stack_frame(None, frame, True)
 
     # See frame after preprocessing
@@ -69,11 +70,11 @@ for episode in range(agent.epoch):
     while not done:
         #env.render()
         action = agent.act(state)
-        next_obs, rew, done, info = env.step(agent.actions[int(action)])
-        #next_obs, rew, done, info = env.step(agent.actions[int(action)][0])
+        #next_obs, rew, done, info = env.step(agent.actions[int(action)])
+        next_obs, rew, done, info = env.step(agent.actions[int(action)][0])
         episode_reward += rew
-        frame = preprocess(next_obs, IMAGE_CROP, agent.image_resize)
-        #frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
+        #frame = preprocess(next_obs, IMAGE_CROP, agent.image_resize)
+        frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
         next_state = stack_frame(state, frame, False)
 
         if is_training:
@@ -81,10 +82,20 @@ for episode in range(agent.epoch):
 
         step_count += 1
 
+        if step_count > agent.network_sync_rate:
+            if (len(agent.replay_memory)) > agent.batch_size:
+                batch = agent.replay_memory.sample()
+
+                agent.optimize(batch)
+                step_count = 0
+
+            # if step_count > agent.network_sync_rate:
+            #     agent.target_net.load_state_dict(agent.policy_net.state_dict())
+            #     step_count = 0
+
         state = next_state
 
     #print("Reward at end of episode:" + str(episode_reward))
-
 
     if is_training:
         if episode_reward > best_reward:
@@ -96,27 +107,22 @@ for episode in range(agent.epoch):
             torch.save(agent.policy_net.state_dict(), agent.MODEL_FILE)
             best_reward = episode_reward
             # Track rewards per episode
-            rewards_per_episode.append(best_reward)
-            best_reward_episodes.append(episode)
+    rewards_per_episode.append(episode_reward)
 
     agent.epsilon = max(agent.epsilon * agent.epsilon_decay, agent.epsilon_min)
     epsilon_history.append(agent.epsilon)
 
-    if (len(agent.replay_memory)) > agent.batch_size:
-        batch = agent.replay_memory.sample()
-
-        agent.optimize(batch)
-
-        if step_count > agent.network_sync_rate:
-            agent.target_net.load_state_dict(agent.policy_net.state_dict())
-            step_count = 0
-
 # Save plots
 fig = plt.figure(1)
+durations_t = torch.tensor(rewards_per_episode, dtype=torch.float)
 # Plot average rewards (Y-axis) vs episodes (X-axis)
 plt.xlabel('Episodes')
 plt.ylabel('Rewards')
-plt.plot(best_reward_episodes, rewards_per_episode)
+plt.plot(durations_t.numpy())
+if len(durations_t) >= 100:
+        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+        means = torch.cat((torch.zeros(99), means))
+        plt.plot(means.numpy())
 
 # Save plots
 fig.savefig(agent.GRAPH_FILE)

@@ -1,15 +1,15 @@
 cart:
   env_id: CartPole-v1
   hidden_layers: 512
-  replay_memory_size: 100000
-  batch_size: 32
+  replay_memory_size: 10000
+  batch_size: 256
   epsilon_init: 1
   epsilon_decay: 0.9995
-  epsilon_min: 0.05
-  network_sync_rate: 10
+  epsilon_min: 0.01
+  network_sync_rate: 100
   learning_rate: 0.0001
-  discount_factor: 0.99
-  epoch: 1000
+  gamma: 0.95
+  epoch: 500
 
 tetris:
   env_id: Tetris-Nes
@@ -17,9 +17,9 @@ tetris:
   replay_memory_size: 100000
   batch_size: 32
   epsilon_init: 1
-  epsilon_decay: 0.99995
-  epsilon_min: 0.05
-  network_sync_rate: 10
+  epsilon_decay: 0.9995
+  epsilon_min: 0.01
+  network_sync_rate: 100
   learning_rate: 0.0001
-  discount_factor: 0.99
-  epoch: 1000
+  gamma: 0.95
+  epoch: 500

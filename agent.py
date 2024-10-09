@@ -38,37 +38,36 @@ class Agent:
         self.epsilon_min = hyperparam['epsilon_min']               # minimum epsilon value
         self.network_sync_rate = hyperparam['network_sync_rate']   # Target step count to sync the policy and target nets
         self.learning_rate = hyperparam['learning_rate']           # Learning rate for training
-        self.discount_factor = hyperparam['discount_factor']       # Discount factor for DQN algorithm
+        self.gamma = hyperparam['gamma']                           # Discount factor gamma for DQN algorithm
         self.epoch = hyperparam['epoch']                           # Amount of games to train for
 
         self.input_shape = input_shape
         self.n_actions = n_actions
-        self.image_resize = 92
-        self.actions = {
-            # B
-            0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
-            # No Operation
-            1: [0, 1, 0, 0, 0, 0, 0, 0, 0],
-            # SELECT
-            2: [0, 0, 1, 0, 0, 0, 0, 0, 0],
-            # START
-            3: [0, 0, 0, 1, 0, 0, 0, 0, 0],
-            # UP
-            4: [0, 0, 0, 0, 1, 0, 0, 0, 0],
-            # DOWN
-            5: [0, 0, 0, 0, 0, 1, 0, 0, 0],
-            # LEFT
-            6: [0, 0, 0, 0, 0, 0, 1, 0, 0],
-            # RIGHT
-            7: [0, 0, 0, 0, 0, 0, 0, 1, 0],
-            # A
-            8: [0, 0, 0, 0, 0, 0, 0, 0, 1]
-        }
+        self.image_resize = input_shape[1]
         # self.actions = {
-        #     0: [0],
-        #     1: [1],
-        #     2: [2]
+        #     # B
+        #     0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
+        #     # No Operation
+        #     1: [0, 1, 0, 0, 0, 0, 0, 0, 0],
+        #     # SELECT
+        #     2: [0, 0, 1, 0, 0, 0, 0, 0, 0],
+        #     # START
+        #     3: [0, 0, 0, 1, 0, 0, 0, 0, 0],
+        #     # UP
+        #     4: [0, 0, 0, 0, 1, 0, 0, 0, 0],
+        #     # DOWN
+        #     5: [0, 0, 0, 0, 0, 1, 0, 0, 0],
+        #     # LEFT
+        #     6: [0, 0, 0, 0, 0, 0, 1, 0, 0],
+        #     # RIGHT
+        #     7: [0, 0, 0, 0, 0, 0, 0, 1, 0],
+        #     # A
+        #     8: [0, 0, 0, 0, 0, 0, 0, 0, 1]
         # }
+        self.actions = {
+            0: [0],
+            1: [1]
+        }
         self.policy_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
 
         self.loss_fn = nn.MSELoss()
@@ -86,37 +85,40 @@ class Agent:
 
             self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate)
 
+        self.TAU = 0.001
+
     # Calculate the Q targets for the current states and run the selected optimizer
     def optimize(self, mini_batch):
         states, actions, rewards, next_states, dones = mini_batch
 
         # Expected Q values using the policy network
-        q_expected_current = self.policy_net(states)
-        q_expected = q_expected_current.gather(1, actions.unsqueeze(1)).squeeze(1)
-
-        # Max predicted Q values for future states using the target network
-        q_targets_next = self.target_net(next_states).detach().max(1)[0]
+        current_q = self.policy_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)
 
         # Compute Q targets
-        q_targets = rewards + (self.discount_factor * q_targets_next * (1 - dones))
+        target_q = rewards + (self.gamma * self.target_net(next_states).max(1)[0] * (1 - dones))
 
         # Compute loss
-        loss = self.loss_fn(q_expected, q_targets)
+        loss = self.loss_fn(current_q, target_q)
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
+        self.soft_update(self.policy_net, self.target_net, self.TAU)
+
     # Run the input through the policy network
     def act(self, curr_state):
         observation = torch.from_numpy(curr_state).unsqueeze(0).to(device)
-        self.policy_net.eval()
+
         with torch.no_grad():
             action_values = self.policy_net(observation)
-        self.policy_net.train()
 
         # Epsilon-greedy action selection
-        if random.random() < self.epsilon:
-            return np.unravel_index(torch.argmax(action_values.cpu()), action_values.shape)[1]
+        if random.random() > self.epsilon:
+            return np.argmax(action_values.cpu().data.numpy())
         else:
             return random.choice(np.arange(self.n_actions))
+
+    def soft_update(self, policy_model, target_model, tau):
+        for target_param, policy_param in zip(target_model.parameters(), policy_model.parameters()):
+            target_param.data.copy_(tau * policy_param.data + (1.0 - tau) * target_param.data)
