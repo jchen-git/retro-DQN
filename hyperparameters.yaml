@@ -1,14 +1,14 @@
 cart:
   env_id: CartPole-v1
-  hidden_layers: 512
-  replay_memory_size: 10000
-  batch_size: 256
+  hidden_layers: 64
+  replay_memory_size: 100000
+  batch_size: 32
   epsilon_init: 1
   epsilon_decay: 0.9995
   epsilon_min: 0.01
   network_sync_rate: 100
   learning_rate: 0.0001
-  gamma: 0.95
+  gamma: 0.99
   epoch: 500
 
 tetris:

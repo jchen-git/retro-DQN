@@ -15,18 +15,15 @@ def preprocess(screen, crop, output):
     screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
 
     # Resize image
-    screen = cv2.resize(screen, (output, output), interpolation=cv2.INTER_CUBIC)
+    screen = cv2.resize(screen, (output, output), interpolation=cv2.INTER_NEAREST)
     return screen
 
 
 def stack_frame(stacked_frames, frame, is_new):
     if is_new:
-        stacked_frames = np.stack(arrays=[frame, frame, frame, frame])
+        stacked_frames = np.stack(arrays=[frame])
         stacked_frames = stacked_frames
     else:
-        stacked_frames[0] = stacked_frames[1]
-        stacked_frames[1] = stacked_frames[2]
-        stacked_frames[2] = stacked_frames[3]
-        stacked_frames[3] = frame
+        stacked_frames[0] = frame
 
     return stacked_frames

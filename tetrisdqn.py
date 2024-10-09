@@ -22,17 +22,14 @@ retro.data.Integrations.add_custom_path(
     os.path.join(SCRIPT_DIR, 'custom_integrations')
 )
 
-
-matplotlib.use('Agg')
-
 #env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
 env = gym.make("CartPole-v1")
 num_actions = env.action_space.n
 
 #IMAGE_CROP = (35, 204, 85, 170)
-#IMAGE_CROP = (150, 350, 1, -1)
-IMAGE_CROP = (1, -1, 1, -1)
-INPUT_SHAPE = (4, 96, 96)
+IMAGE_CROP = (150, 350, 1, -1)
+#IMAGE_CROP = (1, -1, 1, -1)
+INPUT_SHAPE = (1, 128, 128)
 
 #agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
 agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
@@ -71,7 +68,7 @@ for episode in range(agent.epoch):
         #env.render()
         action = agent.act(state)
         #next_obs, rew, done, info = env.step(agent.actions[int(action)])
-        next_obs, rew, done, info = env.step(agent.actions[int(action)][0])
+        next_obs, rew, done, info = env.step(action)
         episode_reward += rew
         #frame = preprocess(next_obs, IMAGE_CROP, agent.image_resize)
         frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)

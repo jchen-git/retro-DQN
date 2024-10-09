@@ -44,29 +44,25 @@ class Agent:
         self.input_shape = input_shape
         self.n_actions = n_actions
         self.image_resize = input_shape[1]
-        # self.actions = {
-        #     # B
-        #     0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
-        #     # No Operation
-        #     1: [0, 1, 0, 0, 0, 0, 0, 0, 0],
-        #     # SELECT
-        #     2: [0, 0, 1, 0, 0, 0, 0, 0, 0],
-        #     # START
-        #     3: [0, 0, 0, 1, 0, 0, 0, 0, 0],
-        #     # UP
-        #     4: [0, 0, 0, 0, 1, 0, 0, 0, 0],
-        #     # DOWN
-        #     5: [0, 0, 0, 0, 0, 1, 0, 0, 0],
-        #     # LEFT
-        #     6: [0, 0, 0, 0, 0, 0, 1, 0, 0],
-        #     # RIGHT
-        #     7: [0, 0, 0, 0, 0, 0, 0, 1, 0],
-        #     # A
-        #     8: [0, 0, 0, 0, 0, 0, 0, 0, 1]
-        # }
         self.actions = {
-            0: [0],
-            1: [1]
+            # B
+            0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
+            # No Operation
+            1: [0, 1, 0, 0, 0, 0, 0, 0, 0],
+            # SELECT
+            2: [0, 0, 1, 0, 0, 0, 0, 0, 0],
+            # START
+            3: [0, 0, 0, 1, 0, 0, 0, 0, 0],
+            # UP
+            4: [0, 0, 0, 0, 1, 0, 0, 0, 0],
+            # DOWN
+            5: [0, 0, 0, 0, 0, 1, 0, 0, 0],
+            # LEFT
+            6: [0, 0, 0, 0, 0, 0, 1, 0, 0],
+            # RIGHT
+            7: [0, 0, 0, 0, 0, 0, 0, 1, 0],
+            # A
+            8: [0, 0, 0, 0, 0, 0, 0, 0, 1]
         }
         self.policy_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
 
@@ -77,13 +73,11 @@ class Agent:
         self.MODEL_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.pt')
         self.GRAPH_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.png')
 
-        if training:
-            self.replay_memory = ReplayMemory(self.replay_memory_size, self.batch_size, device)
 
-            self.target_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
-            self.target_net.load_state_dict(self.policy_net.state_dict())
-
-            self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate)
+        self.replay_memory = ReplayMemory(self.replay_memory_size, self.batch_size, device)
+        self.target_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
 
         self.TAU = 0.001
 
@@ -92,7 +86,8 @@ class Agent:
         states, actions, rewards, next_states, dones = mini_batch
 
         # Expected Q values using the policy network
-        current_q = self.policy_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)
+        q = self.policy_net(states)
+        current_q = q.gather(1, actions.unsqueeze(1)).squeeze(1)
 
         # Compute Q targets
         target_q = rewards + (self.gamma * self.target_net(next_states).max(1)[0] * (1 - dones))
