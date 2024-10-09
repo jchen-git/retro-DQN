@@ -26,10 +26,12 @@ retro.data.Integrations.add_custom_path(
 env = gym.make("CartPole-v1")
 num_actions = env.action_space.n
 
+# CartPole Resolution is (600 x 400)
 #IMAGE_CROP = (35, 204, 85, 170)
-IMAGE_CROP = (150, 350, 1, -1)
+IMAGE_CROP = (150, 350, 200, 400)
 #IMAGE_CROP = (1, -1, 1, -1)
-INPUT_SHAPE = (1, 128, 128)
+#INPUT_SHAPE = (1, 128, 128)
+INPUT_SHAPE = 4
 
 #agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
 agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
@@ -44,19 +46,19 @@ best_reward_episodes = []
 
 log_message=f"{datetime.now()}: Training..."
 print(log_message)
-with open(agent.LOG_FILE, 'a') as file:
+with open(agent.LOG_FILE, 'w') as file:
     file.write(log_message + '\n')
 
 for episode in range(agent.epoch):
     #env.load_state(random.choice(SAVE_STATES))
-    obs = env.reset()
+    state = env.reset()
 
     done = False
     episode_reward = 0.0
 
     #frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
-    frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
-    state = stack_frame(None, frame, True)
+    # frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
+    # state = stack_frame(None, frame, True)
 
     # See frame after preprocessing
     # plt.figure()
@@ -68,11 +70,11 @@ for episode in range(agent.epoch):
         #env.render()
         action = agent.act(state)
         #next_obs, rew, done, info = env.step(agent.actions[int(action)])
-        next_obs, rew, done, info = env.step(action)
+        next_state, rew, done, info = env.step(action)
         episode_reward += rew
         #frame = preprocess(next_obs, IMAGE_CROP, agent.image_resize)
-        frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
-        next_state = stack_frame(state, frame, False)
+        # frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
+        # next_state = stack_frame(state, frame, False)
 
         if is_training:
             agent.replay_memory.append(state, action, rew, next_state, done)
@@ -84,12 +86,11 @@ for episode in range(agent.epoch):
                 batch = agent.replay_memory.sample()
 
                 agent.optimize(batch)
-                step_count = 0
 
-            # if step_count > agent.network_sync_rate:
-            #     agent.target_net.load_state_dict(agent.policy_net.state_dict())
-            #     step_count = 0
+            agent.target_net.load_state_dict(agent.policy_net.state_dict())
+            step_count = 0
 
+        #obs = next_obs
         state = next_state
 
     #print("Reward at end of episode:" + str(episode_reward))

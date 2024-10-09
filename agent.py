@@ -9,6 +9,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from torch import nn
+from triton.language import dtype
+
 from dqn import DQN
 from exp_replay import ReplayMemory
 
@@ -43,7 +45,7 @@ class Agent:
 
         self.input_shape = input_shape
         self.n_actions = n_actions
-        self.image_resize = input_shape[1]
+        #self.image_resize = input_shape[1]
         self.actions = {
             # B
             0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -66,8 +68,7 @@ class Agent:
         }
         self.policy_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
 
-        self.loss_fn = nn.MSELoss()
-        self.optimizer = None
+        self.loss_fn = nn.SmoothL1Loss()
 
         self.LOG_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.log')
         self.MODEL_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.pt')
@@ -77,7 +78,7 @@ class Agent:
         self.replay_memory = ReplayMemory(self.replay_memory_size, self.batch_size, device)
         self.target_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
+        self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
 
         self.TAU = 0.001
 
@@ -89,27 +90,30 @@ class Agent:
         q = self.policy_net(states)
         current_q = q.gather(1, actions.unsqueeze(1)).squeeze(1)
 
+        with torch.no_grad():
+            next_state_q = self.target_net(next_states).max(1)[0]
+
         # Compute Q targets
-        target_q = rewards + (self.gamma * self.target_net(next_states).max(1)[0] * (1 - dones))
+        target_q = rewards + (self.gamma * next_state_q * (1 - dones))
 
         # Compute loss
         loss = self.loss_fn(current_q, target_q)
 
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        self.soft_update(self.policy_net, self.target_net, self.TAU)
+        #self.soft_update(self.policy_net, self.target_net, self.TAU)
 
     # Run the input through the policy network
     def act(self, curr_state):
-        observation = torch.from_numpy(curr_state).unsqueeze(0).to(device)
-
-        with torch.no_grad():
-            action_values = self.policy_net(observation)
+        observation = torch.Tensor(curr_state).unsqueeze(0).to(device)
 
         # Epsilon-greedy action selection
         if random.random() > self.epsilon:
+            with torch.no_grad():
+                action_values = self.policy_net(observation)
             return np.argmax(action_values.cpu().data.numpy())
         else:
             return random.choice(np.arange(self.n_actions))
