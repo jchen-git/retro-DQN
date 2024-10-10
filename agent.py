@@ -84,24 +84,26 @@ class Agent:
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
 
+    def get_max_pred_q(self, state):
+        if state is not None:
+            with torch.no_grad():
+                return self.target_net(state).max(1).values
+        else:
+            return 0.0
+
     # Calculate the Q targets for the current states and run the selected optimizer
     def optimize(self):
         transitions = self.replay_memory.sample()
         batch = Transition(*zip(*transitions))
 
-        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                                batch.next_state)), device=device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
-                                           if s is not None])
-
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
 
-        next_states = torch.zeros(self.batch_size, device=device)
-
-        with torch.no_grad():
-            next_states[non_final_mask] = self.target_net(non_final_next_states).max(1).values
+        # Get max predicted Q values for elements in the next_states batch from target model if the next states are not
+        # after the episode end state (None)
+        next_states = torch.tensor(tuple(map(self.get_max_pred_q, batch.next_state)),
+                                   device=device, dtype=torch.float32)
 
         # Compute the expected Q values
         expected_state_action_values = (next_states * self.GAMMA) + rewards
@@ -116,7 +118,6 @@ class Agent:
         loss.backward()
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
-
         self.soft_update()
 
     # Run the input through the policy network

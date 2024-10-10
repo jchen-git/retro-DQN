@@ -10,6 +10,11 @@ from datetime import datetime
 from agent import Agent
 from preprocessing import preprocess, stack_frame
 
+# TODO
+# Create ensemble model and test
+# Preprocess input image into black and white, no shades
+# Change rewards given
+
 # Set path for custom ROMs
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,19 +27,21 @@ retro.data.Integrations.add_custom_path(
     os.path.join(SCRIPT_DIR, 'custom_integrations')
 )
 
-#env = gym.make("CartPole-v1")
-env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
+# CartPole Testing
+# Resolution is (600 x 400)
+env = gym.make("CartPole-v1")
 num_actions = env.action_space.n
-
-# CartPole Resolution is (600 x 400)
-IMAGE_CROP = (35, 204, 85, 170)
-#IMAGE_CROP = (150, 350, 1, -1)
-#IMAGE_CROP = (1, -1, 1, -1)
+IMAGE_CROP = (150, 350, 1, -1)
 INPUT_SHAPE = (3, 164, 164)
-#INPUT_SHAPE = 4
+agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
 
-agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
-#agent = Agent(INPUT_SHAPE, num_actions, "cart", training=True)
+# Tetris
+# env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
+# num_actions = env.action_space.n
+# IMAGE_CROP = (35, 204, 85, 170)
+# INPUT_SHAPE = (3, 164, 164)
+# agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
+
 is_training = True
 rewards_per_episode = []
 epsilon_history = []
@@ -49,14 +56,14 @@ with open(agent.LOG_FILE, 'w') as file:
     file.write(log_message + '\n')
 
 for episode in range(agent.epoch):
-    env.load_state(random.choice(SAVE_STATES))
+    #env.load_state(random.choice(SAVE_STATES))
     state = env.reset()
 
     done = False
     episode_reward = 0.0
 
-    frame = preprocess(state, IMAGE_CROP, agent.image_resize)
-    #frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
+    #frame = preprocess(state, IMAGE_CROP, agent.image_resize)
+    frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
     frames = stack_frame(None, frame, True)
     state = torch.tensor(frames, dtype=torch.float32, device="cuda").unsqueeze(0)
 
@@ -67,13 +74,13 @@ for episode in range(agent.epoch):
     # plt.show()
 
     while not done:
-        env.render()
+        #env.render()
         action = agent.act(state)
-        obs, rew, done, info = env.step(agent.actions[action.item()])
-        #obs, rew, done, info = env.step(action.item())
+        #obs, rew, done, info = env.step(agent.actions[action.item()])
+        obs, rew, done, info = env.step(action.item())
         episode_reward += rew
-        frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
-        #frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
+        #frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
+        frame = preprocess(env.render("rgb_array"), IMAGE_CROP, agent.image_resize)
         frames = stack_frame(frames, frame, False)
 
         if done:
