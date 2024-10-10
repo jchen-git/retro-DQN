@@ -22,15 +22,15 @@ retro.data.Integrations.add_custom_path(
     os.path.join(SCRIPT_DIR, 'custom_integrations')
 )
 
-env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
 #env = gym.make("CartPole-v1")
+env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
 num_actions = env.action_space.n
 
 # CartPole Resolution is (600 x 400)
 IMAGE_CROP = (35, 204, 85, 170)
-#IMAGE_CROP = (150, 350, 50, 550)
+#IMAGE_CROP = (150, 350, 1, -1)
 #IMAGE_CROP = (1, -1, 1, -1)
-INPUT_SHAPE = (1, 96, 96)
+INPUT_SHAPE = (3, 164, 164)
 #INPUT_SHAPE = 4
 
 agent = Agent(INPUT_SHAPE, num_actions, "tetris", training=True)
@@ -101,7 +101,10 @@ for episode in range(agent.epoch):
 
             torch.save(agent.policy_net.state_dict(), agent.MODEL_FILE)
             best_reward = episode_reward
-            # Track rewards per episode
+        if episode % 50 == 0:
+            log_message = f"{datetime.now()}: Episode {episode} passed"
+            print(log_message)
+    # Track rewards per episode
     rewards_per_episode.append(episode_reward)
 
     epsilon_history.append(agent.epsilon)

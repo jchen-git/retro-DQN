@@ -28,6 +28,10 @@
       "address": 1012,
       "type": "<u2"
     },
+    "bottom": {
+      "address": 1214,
+      "type": ">d1"
+    },
     "down_hold_timer": {
       "address": 79,
       "type": "|u1"

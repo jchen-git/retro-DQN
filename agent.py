@@ -43,8 +43,9 @@ class Agent:
         self.epsilon_min = hyperparam['epsilon_min']               # minimum epsilon value
         self.network_sync_rate = hyperparam['network_sync_rate']   # Target step count to sync the policy and target nets
         self.learning_rate = hyperparam['learning_rate']           # Learning rate for training
-        self.gamma = hyperparam['gamma']                           # Discount factor gamma for DQN algorithm
+        self.GAMMA = hyperparam['GAMMA']                           # Discount factor gamma for DQN algorithm
         self.epoch = hyperparam['epoch']                           # Amount of games to train for
+        self.TAU = hyperparam['TAU']
 
         self.input_shape = input_shape
         self.n_actions = n_actions
@@ -83,8 +84,6 @@ class Agent:
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
 
-        self.TAU = 0.005
-
     # Calculate the Q targets for the current states and run the selected optimizer
     def optimize(self):
         transitions = self.replay_memory.sample()
@@ -94,24 +93,21 @@ class Agent:
                                                 batch.next_state)), device=device, dtype=torch.bool)
         non_final_next_states = torch.cat([s for s in batch.next_state
                                            if s is not None])
+
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
 
         next_states = torch.zeros(self.batch_size, device=device)
+
         with torch.no_grad():
             next_states[non_final_mask] = self.target_net(non_final_next_states).max(1).values
+
         # Compute the expected Q values
-        expected_state_action_values = (next_states * self.gamma) + rewards
+        expected_state_action_values = (next_states * self.GAMMA) + rewards
 
         # # Expected Q values using the policy network
         current_q = self.policy_net(states).gather(1, actions)
-
-        # with torch.no_grad():
-        #     next_state_q = self.target_net(next_states).max(1)[0]
-        #
-        # # Compute Q targets
-        # target_q = rewards + (self.gamma * next_state_q)
 
         # Compute loss
         loss = self.loss_fn(current_q, expected_state_action_values.unsqueeze(1))

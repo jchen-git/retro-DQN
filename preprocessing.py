@@ -21,9 +21,11 @@ def preprocess(screen, crop, output):
 
 def stack_frame(stacked_frames, frame, is_new):
     if is_new:
-        stacked_frames = np.stack(arrays=[frame])
+        stacked_frames = np.stack(arrays=[frame, frame, frame])
         stacked_frames = stacked_frames
     else:
-        stacked_frames[0] = frame
+        stacked_frames[0] = stacked_frames[1]
+        stacked_frames[1] = stacked_frames[2]
+        stacked_frames[2] = frame
 
     return stacked_frames

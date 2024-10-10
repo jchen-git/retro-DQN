@@ -9,9 +9,9 @@ class DQN(nn.Module):
         self.num_actions = actions_dim
 
         self.features = nn.Sequential(
-            nn.Conv2d(input_shape[0], 64, kernel_size=5, stride=3),
+            nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=4, stride=2),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1),
             nn.ReLU(),
@@ -21,8 +21,6 @@ class DQN(nn.Module):
 
         self.fc = nn.Sequential(
             nn.Linear(self.feature_size(), hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, actions_dim)
         )

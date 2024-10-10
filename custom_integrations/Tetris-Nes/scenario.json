@@ -4,12 +4,8 @@
     "variables": {
       "gameover": {
         "op": "equal",
-        "reference": 14
-      },
-	  "I": {
-		"op": "equal",
-		"reference": 10
-	  }
+        "reference": 1
+      }
 	}
   },
   "reward": {
@@ -39,7 +35,7 @@
         "reward": 0.1
       },
 	  "down_hold_timer": {
-		"reward": 0.5
+		"reward": 0.1
 	  },
 	  "y_pos_curr_piece": {
 		"reward": 0.1
