@@ -1,23 +1,12 @@
-# TODO
-# Implement DQN to Gym Environment
 import random
-
-import matplotlib
 import torch
 import yaml
 import os
 import numpy as np
-import matplotlib.pyplot as plt
-from torch import nn
-from collections import namedtuple
-
 from dqn import DQN
 from exp_replay import ReplayMemory
 
 # Action Space = ['B', None, 'SELECT', 'START', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'A']
-
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'reward', 'next_state'))
 
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -27,7 +16,7 @@ LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
 class Agent:
-    def __init__(self, input_shape, n_actions, hyperparameter_set, training=False):
+    def __init__(self, input_shape, hyperparameter_set, training=False):
         # Get hyperparameters from yaml file in current directory
         with open('hyperparameters.yaml', 'r') as file:
             all_hyperparam_sets = yaml.safe_load(file)
@@ -46,21 +35,21 @@ class Agent:
         self.GAMMA = hyperparam['GAMMA']                           # Discount factor gamma for DQN algorithm
         self.epoch = hyperparam['epoch']                           # Amount of games to train for
         self.TAU = hyperparam['TAU']
+        self.FRAME_SKIPS = hyperparam['frame_skips']               # Amount of frames to skip during training
 
         self.input_shape = input_shape
-        self.n_actions = n_actions
         self.image_resize = input_shape[1]
         self.actions = {
             # B
             0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
             # No Operation
             1: [0, 1, 0, 0, 0, 0, 0, 0, 0],
-            # SELECT
-            2: [0, 0, 1, 0, 0, 0, 0, 0, 0],
-            # START
-            3: [0, 0, 0, 1, 0, 0, 0, 0, 0],
-            # UP
-            4: [0, 0, 0, 0, 1, 0, 0, 0, 0],
+            # LEFT + B
+            2: [1, 0, 0, 0, 0, 0, 1, 0, 0],
+            # LEFT + A
+            3: [0, 0, 0, 0, 0, 0, 1, 0, 1],
+            # RIGHT + B
+            4: [1, 0, 0, 0, 0, 0, 0, 1, 0],
             # DOWN
             5: [0, 0, 0, 0, 0, 1, 0, 0, 0],
             # LEFT
@@ -68,51 +57,45 @@ class Agent:
             # RIGHT
             7: [0, 0, 0, 0, 0, 0, 0, 1, 0],
             # A
-            8: [0, 0, 0, 0, 0, 0, 0, 0, 1]
+            8: [0, 0, 0, 0, 0, 0, 0, 0, 1],
+            # RIGHT + A
+            9: [0, 0, 0, 0, 0, 0, 0, 1, 1]
         }
-        self.policy_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
+        self.policy_net = DQN(self.input_shape, len(self.actions), self.hidden_layer_num).to(device)
 
-        self.loss_fn = nn.MSELoss()
-
-        self.LOG_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.log')
-        self.MODEL_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.pt')
-        self.GRAPH_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.png')
-
+        self.loss_fn = torch.nn.MSELoss()
 
         self.replay_memory = ReplayMemory(self.replay_memory_size, self.batch_size, device)
-        self.target_net = DQN(self.input_shape, self.n_actions, self.hidden_layer_num).to(device)
+        self.target_net = DQN(self.input_shape, len(self.actions), self.hidden_layer_num).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
 
-    def get_max_pred_q(self, state):
-        if state is not None:
-            with torch.no_grad():
-                return self.target_net(state).max(1).values
-        else:
-            return 0.0
+        self.LOG_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.log')
+        self.DATA_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.dat')
+        self.MODEL_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.pt')
+        self.GRAPH_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.png')
+        self.GRAPH_SCORE_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}_score.png')
 
     # Calculate the Q targets for the current states and run the selected optimizer
     def optimize(self):
         transitions = self.replay_memory.sample()
-        batch = Transition(*zip(*transitions))
+        states, actions, rewards, next_states, dones = zip(*transitions)
 
-        states = torch.cat(batch.state)
-        actions = torch.cat(batch.action)
-        rewards = torch.cat(batch.reward)
-
-        # Get max predicted Q values for elements in the next_states batch from target model if the next states are not
-        # after the episode end state (None)
-        next_states = torch.tensor(tuple(map(self.get_max_pred_q, batch.next_state)),
-                                   device=device, dtype=torch.float32)
+        states = torch.cat(states)
+        actions = torch.cat(actions)
+        rewards = torch.cat(rewards)
+        next_states = torch.cat(next_states)
+        dones = torch.tensor(dones, device=device, dtype=torch.float)
 
         # Compute the expected Q values
-        expected_state_action_values = (next_states * self.GAMMA) + rewards
+        with torch.no_grad():
+            expected_q = (1 - dones) * self.target_net(next_states).max(1).values * self.GAMMA + rewards
 
-        # # Expected Q values using the policy network
+        # Expected Q values using the policy network
         current_q = self.policy_net(states).gather(1, actions)
 
         # Compute loss
-        loss = self.loss_fn(current_q, expected_state_action_values.unsqueeze(1))
+        loss = self.loss_fn(current_q, expected_q.unsqueeze(1))
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -128,7 +111,7 @@ class Agent:
             with torch.no_grad():
                 return self.policy_net(curr_state).max(1).indices.view(1, 1)
         else:
-            return torch.tensor([[random.choice(np.arange(self.n_actions))]], device=device, dtype=torch.long)
+            return torch.tensor([[random.choice(np.arange(len(self.actions)))]], device=device, dtype=torch.long)
 
     def soft_update(self):
         target_net_state_dict = self.target_net.state_dict()

@@ -5,8 +5,9 @@ import cv2
 # crop: Tuple in this format (y, y+h, x, x+w)
 # output: Output square image of a given size
 def preprocess(screen, crop, output):
-    # Gray scale the image
+    # Convert image to strictly black and white
     screen = cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
+    screen = cv2.threshold(screen, 1, 255, cv2.THRESH_BINARY)[1]
 
     # Crop screen [Top:Bot, Left:Right]
     screen = screen[crop[0]:crop[1], crop[2]:crop[3]]
@@ -19,13 +20,14 @@ def preprocess(screen, crop, output):
     return screen
 
 
-def stack_frame(stacked_frames, frame, is_new):
-    if is_new:
-        stacked_frames = np.stack(arrays=[frame, frame, frame])
+def stack_frame(stacked_frames, frame, new):
+    if new:
+        stacked_frames = np.stack(arrays=[frame, frame, frame, frame])
         stacked_frames = stacked_frames
     else:
         stacked_frames[0] = stacked_frames[1]
         stacked_frames[1] = stacked_frames[2]
-        stacked_frames[2] = frame
+        stacked_frames[2] = stacked_frames[3]
+        stacked_frames[3] = frame
 
     return stacked_frames

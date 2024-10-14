@@ -1,50 +1,26 @@
 {
+  "crop": [
+    0,
+    0,
+    0,
+    0
+  ],
   "done": {
-    "condition": "any",
     "variables": {
       "gameover": {
-        "op": "equal",
+        "op": "greater-or-equal",
         "reference": 1
       }
-	}
+    }
   },
   "reward": {
     "variables": {
+      "piece_y_pos_rew": {
+        "reward": 0.05
+      },
       "score": {
-        "reward": 1.0
-      },
-	  "T": {
-        "reward": 0.1
-      },
-	  "Z": {
-        "reward": 0.1
-      },
-	  "O": {
-        "reward": 0.1
-      },
-	  "S": {
-        "reward": 0.1
-      },
-	  "L": {
-        "reward": 0.1
-      },
-	  "J": {
-        "reward": 0.1
-      },
-	  "I": {
-        "reward": 0.1
-      },
-	  "down_hold_timer": {
-		"reward": 0.1
-	  },
-	  "y_pos_curr_piece": {
-		"reward": 0.1
-	  }
+        "reward": 0.02
+      }
     }
-  },
-  "penalty": {
-	"gameover": {
-		"penalty": 1000
-	}
   }
 }

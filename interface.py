@@ -11,6 +11,8 @@ class WidgetGallery(QDialog):
         super(WidgetGallery, self).__init__(parent)
 
         self.originalPalette = QApplication.palette()
+        self.setFixedHeight(680)
+        self.setFixedWidth(580)
 
         styleComboBox = QComboBox()
         styleComboBox.addItems(QStyleFactory.keys())
@@ -19,13 +21,13 @@ class WidgetGallery(QDialog):
         styleLabel.setBuddy(styleComboBox)
 
         self.useStylePaletteCheckBox = QCheckBox("&Use style's standard palette")
-        self.useStylePaletteCheckBox.setChecked(True)
+        self.useStylePaletteCheckBox.setChecked(False)
 
         disableWidgetsCheckBox = QCheckBox("&Disable widgets")
 
         self.createTopLeftGroupBox()
         self.createTopRightGroupBox()
-        self.createBottomLeftTabWidget()
+        self.create_menu_tabs()
         self.createBottomRightGroupBox()
         self.createProgressBar()
 
@@ -33,7 +35,7 @@ class WidgetGallery(QDialog):
         self.useStylePaletteCheckBox.toggled.connect(self.changePalette)
         disableWidgetsCheckBox.toggled.connect(self.topLeftGroupBox.setDisabled)
         disableWidgetsCheckBox.toggled.connect(self.topRightGroupBox.setDisabled)
-        disableWidgetsCheckBox.toggled.connect(self.bottomLeftTabWidget.setDisabled)
+        disableWidgetsCheckBox.toggled.connect(self.menu_tab_widget.setDisabled)
         disableWidgetsCheckBox.toggled.connect(self.bottomRightGroupBox.setDisabled)
 
         topLayout = QHBoxLayout()
@@ -45,11 +47,7 @@ class WidgetGallery(QDialog):
 
         mainLayout = QGridLayout()
         mainLayout.addLayout(topLayout, 0, 0, 1, 2)
-        mainLayout.addWidget(self.topLeftGroupBox, 1, 0)
-        mainLayout.addWidget(self.topRightGroupBox, 1, 1)
-        mainLayout.addWidget(self.bottomLeftTabWidget, 2, 0)
-        mainLayout.addWidget(self.bottomRightGroupBox, 2, 1)
-        mainLayout.addWidget(self.progressBar, 3, 0, 1, 2)
+        mainLayout.addWidget(self.menu_tab_widget, 1, 0)
         mainLayout.setRowStretch(1, 1)
         mainLayout.setRowStretch(2, 1)
         mainLayout.setColumnStretch(0, 1)
@@ -58,6 +56,55 @@ class WidgetGallery(QDialog):
 
         self.setWindowTitle("Styles")
         self.changeStyle('Windows')
+
+    def create_menu_tabs(self):
+        self.menu_tab_widget = QTabWidget()
+        self.menu_tab_widget.setSizePolicy(QSizePolicy.Policy.Preferred,
+                QSizePolicy.Policy.Ignored)
+        output_group_box = QGroupBox("")
+        buttons_group_box = QGroupBox("")
+
+        self.menu_tab_widget.setFixedHeight(630)
+        self.menu_tab_widget.setFixedWidth(560)
+        training_layout = QHBoxLayout()
+        training_tab = QWidget()
+        output_box = QTextEdit()
+        training_tab.setFixedHeight(580)
+        training_tab.setFixedWidth(480)
+        output_box.setFixedHeight(100)
+        output_box.setFixedWidth(250)
+        training_prog_bar = QProgressBar()
+        training_prog_bar.setFixedWidth(680)
+        training_prog_bar.setRange(0, 10000)
+        training_prog_bar.setValue(0)
+
+        start_training_button = QPushButton("Start Training")
+        start_training_button.setDefault(True)
+        run_model_button = QPushButton("Run Model")
+        run_model_button.setDefault(True)
+
+        output_layout = QVBoxLayout()
+        output_layout.addWidget(output_box)
+        output_layout.addStretch(1)
+        output_group_box.setLayout(output_layout)
+
+        button_layout = QVBoxLayout()
+        button_layout.addWidget(start_training_button)
+        button_layout.addWidget(run_model_button)
+        button_layout.addStretch(1)
+        buttons_group_box.setLayout(button_layout)
+
+        training_tab_grid = QGridLayout()
+        training_tab_grid.addLayout(training_layout, 0, 0, 1, 2)
+        training_tab_grid.addWidget(output_group_box, 1, 0)
+        training_tab_grid.addWidget(buttons_group_box, 1, 1)
+        training_tab_grid.addWidget(training_prog_bar, 0, 0, 1, 2)
+        training_tab.setLayout(training_tab_grid)
+
+        settings_tab = QWidget()
+
+        self.menu_tab_widget.addTab(training_tab, "Training")
+        self.menu_tab_widget.addTab(settings_tab, "Settings")
 
     def changeStyle(self, styleName):
         QApplication.setStyle(QStyleFactory.create(styleName))
@@ -113,37 +160,6 @@ class WidgetGallery(QDialog):
         layout.addWidget(flatPushButton)
         layout.addStretch(1)
         self.topRightGroupBox.setLayout(layout)
-
-    def createBottomLeftTabWidget(self):
-        self.bottomLeftTabWidget = QTabWidget()
-        self.bottomLeftTabWidget.setSizePolicy(QSizePolicy.Policy.Preferred,
-                QSizePolicy.Policy.Ignored)
-
-        tab1 = QWidget()
-        tableWidget = QTableWidget(10, 10)
-
-        tab1hbox = QHBoxLayout()
-        tab1hbox.setContentsMargins(5, 5, 5, 5)
-        tab1hbox.addWidget(tableWidget)
-        tab1.setLayout(tab1hbox)
-
-        tab2 = QWidget()
-        textEdit = QTextEdit()
-
-        textEdit.setPlainText("Twinkle, twinkle, little star,\n"
-                              "How I wonder what you are.\n" 
-                              "Up above the world so high,\n"
-                              "Like a diamond in the sky.\n"
-                              "Twinkle, twinkle, little star,\n" 
-                              "How I wonder what you are!\n")
-
-        tab2hbox = QHBoxLayout()
-        tab2hbox.setContentsMargins(5, 5, 5, 5)
-        tab2hbox.addWidget(textEdit)
-        tab2.setLayout(tab2hbox)
-
-        self.bottomLeftTabWidget.addTab(tab1, "&Table")
-        self.bottomLeftTabWidget.addTab(tab2, "Text &Edit")
 
     def createBottomRightGroupBox(self):
         self.bottomRightGroupBox = QGroupBox("Group 3")
