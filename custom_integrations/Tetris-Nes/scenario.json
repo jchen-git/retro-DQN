@@ -8,18 +8,65 @@
   "done": {
     "variables": {
       "gameover": {
-        "op": "greater-or-equal",
+        "op": "equal",
         "reference": 1
+      },
+      "row11_0": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
+      },
+      "row11_1": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
+      },
+      "row11_2": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
+      },
+      "row11_3": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
+      },
+      "row11_4": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
+      },
+      "row11_5": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
+      },
+      "row11_6": {
+        "measurement": "absolute",
+        "op": "not-equal",
+        "reference": 5
+      },
+      "row11_7": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
+      },
+      "row11_8": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
+      },
+      "row11_9": {
+        "measurement": "absolute",
+		"op": "not-equal",
+        "reference": 5
       }
     }
   },
   "reward": {
     "variables": {
-      "piece_y_pos_rew": {
-        "reward": 0.05
-      },
       "score": {
-        "reward": 0.02
+        "reward": 1
       }
     }
   }

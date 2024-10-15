@@ -15,12 +15,13 @@ class DQN(nn.Module):
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2),
             nn.Flatten()
         )
 
         self.fc = nn.Sequential(
             nn.Linear(self.feature_size(), hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, actions_dim)
         )

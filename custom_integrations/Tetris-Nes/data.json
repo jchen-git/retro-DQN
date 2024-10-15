@@ -1,5 +1,9 @@
 {
   "info": {
+    "game_phase": {
+      "address": 72,
+      "type": "|n1"
+    },
     "gameover": {
       "address": 88,
       "type": "<d2"
@@ -8,17 +12,9 @@
       "address": 86,
       "type": "|u1"
     },
-    "piece_y_pos_pun": {
+    "piece_y_pos": {
       "address": 65,
       "type": "|u1"
-    },
-    "piece_y_pos_rew": {
-      "address": 65,
-      "type": "|u1"
-    },
-    "score": {
-      "address": 83,
-      "type": "<d3"
     },
     "row11_0": {
       "address": 1134,
@@ -219,6 +215,10 @@
     "row19_9": {
       "address": 1223,
       "type": "|n1"
+    },
+    "score": {
+      "address": 83,
+      "type": "<d3"
     }
   }
 }

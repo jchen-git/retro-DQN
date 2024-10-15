@@ -14,15 +14,15 @@ cart:
 
 tetris:
   env_id: Tetris-Nes
-  hidden_layers: 256
-  replay_memory_size: 12000
-  batch_size: 32
-  epsilon_init: 0.5
+  hidden_layers: 512
+  replay_memory_size: 30000
+  mini_batch_size: 32
+  epsilon_init: 1
   epsilon_decay: 0.9995
-  epsilon_min: 0.05
-  network_sync_rate: 100
-  learning_rate: 0.0001
-  GAMMA: 0.99
-  TAU: 0.005
-  epoch: 5000
+  epsilon_min: 0.1
+  update_rate: 1000
+  learning_rate: 0.00025
+  GAMMA: 0.95
+  TAU: 0.0001
+  epoch: 20000
   frame_skips: 4

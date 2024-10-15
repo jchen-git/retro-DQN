@@ -13,6 +13,9 @@ from preprocessing import preprocess, stack_frame
 # Change rewards given such that bottom four rows should be filled
 # Create GUI
 
+# if GPU is to be used
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def create_graphs():
     # Save plots
     fig = plt.figure(1)
@@ -64,13 +67,14 @@ matplotlib.use('Agg')
 env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
 num_actions = env.action_space.n
 IMAGE_CROP = (35, 204, 85, 170)
-INPUT_SHAPE = (4, 128, 128)
+INPUT_SHAPE = (4, 84, 84)
 agent = Agent(INPUT_SHAPE,"tetris", training=True)
 
 is_training = True
 rewards_per_episode = []
 score_per_episode = []
 best_reward = -999.0
+timestep = 0
 
 log_message=f"{datetime.now()}: Training..."
 print(log_message)
@@ -80,17 +84,20 @@ with open(agent.LOG_FILE, 'w') as file:
 if os.path.isfile(agent.DATA_FILE):
     with open(agent.DATA_FILE, 'r') as file:
         best_reward = float(file.read())
+else:
+    with open(agent.DATA_FILE, 'w') as file:
+        file.write(str(best_reward))
 
-agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
+if os.path.isfile(agent.MODEL_FILE):
+    agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
 
 for episode in range(agent.epoch):
     env.load_state(random.choice(SAVE_STATES))
-    state = env.reset()
-
-    done = False
+    obs = env.reset()
     episode_reward = 0.0
+    done = False
 
-    frame = preprocess(state, IMAGE_CROP, agent.image_resize)
+    frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
     frames = stack_frame(None, frame, True)
     state = torch.tensor(frames, dtype=torch.float32, device="cuda").unsqueeze(0)
 
@@ -100,26 +107,28 @@ for episode in range(agent.epoch):
         env.render()
 
         action = agent.act(state)
+        obs, rew, done, info = env.step(agent.actions[action.item()])
         while current_step < (agent.FRAME_SKIPS + 1) and not done:
-            obs, rew, done, info = env.step(agent.actions[action.item()])
+            obs, rew, done, info = env.step(agent.actions[1])
             total_reward += rew
             current_step += 1
         rew = total_reward
         episode_reward += rew
-
         frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
         frames = stack_frame(frames, frame, False)
-
-        next_state = torch.tensor(frames, dtype=torch.float32, device='cuda').unsqueeze(0)
-        rew = torch.tensor([rew], device='cuda')
-        done = torch.tensor(done, device='cuda')
-
+        next_state = torch.tensor(frames, dtype=torch.float32, device=device).unsqueeze(0)
+        rew = torch.tensor([rew], device=device)
+        done = torch.tensor(done, device=device)
         agent.replay_memory.append(state, action, rew, next_state, done)
-
-        if (len(agent.replay_memory)) > agent.batch_size:
-            agent.optimize()
-
         state = next_state
+
+        timestep += 1
+
+        if timestep > agent.update_rate:
+            if (len(agent.replay_memory)) > agent.mini_batch_size:
+                agent.optimize()
+            timestep = 0
+
 
     # Track rewards per episode
     rewards_per_episode.append(episode_reward)
