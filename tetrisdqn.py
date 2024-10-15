@@ -5,6 +5,7 @@ import retro
 import torch
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
 from datetime import datetime
 from agent import Agent
 from preprocessing import preprocess, stack_frame
@@ -15,6 +16,9 @@ from preprocessing import preprocess, stack_frame
 
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_bumpiness(board):
+    pass
 
 def create_graphs():
     # Save plots
@@ -64,7 +68,7 @@ retro.data.Integrations.add_custom_path(
 matplotlib.use('Agg')
 
 # Tetris game
-env = retro.make("Tetris-Nes", inttype=retro.data.Integrations.ALL)
+env = retro.make("Tetris-Nes", state=SAVE_STATES[0] , inttype=retro.data.Integrations.ALL, obs_type=retro.Observations.RAM)
 num_actions = env.action_space.n
 IMAGE_CROP = (35, 204, 85, 170)
 INPUT_SHAPE = (4, 84, 84)
@@ -96,6 +100,13 @@ for episode in range(agent.epoch):
     obs = env.reset()
     episode_reward = 0.0
     done = False
+
+    obs, rew, done, info = env.step(agent.actions[0])
+
+    board = obs[0x0400:0x04C8].reshape((20,10)).copy()
+    board = board[board == 239] = 0
+    board_height = board.any(axis=1).sum()
+    lines_being_cleared = obs[0x0056]
 
     frame = preprocess(obs, IMAGE_CROP, agent.image_resize)
     frames = stack_frame(None, frame, True)
