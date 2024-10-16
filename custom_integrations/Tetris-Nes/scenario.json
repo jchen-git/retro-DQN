@@ -8,18 +8,33 @@
   "done": {
     "variables": {
       "gameover": {
+<<<<<<< Updated upstream
         "op": "greater-or-equal",
         "reference": 1
+=======
+        "op": "greater-than",
+        "reference": 2
+>>>>>>> Stashed changes
       }
     }
   },
   "reward": {
     "variables": {
+<<<<<<< Updated upstream
       "piece_y_pos_rew": {
         "reward": 0.05
       },
       "score": {
         "reward": 0.02
+=======
+      "lines_being_cleared": {
+        "reward": 5
+      },
+      "gameover": {
+        "op": "greater-than",
+        "reference": 2,
+        "reward": -5
+>>>>>>> Stashed changes
       }
     }
   }

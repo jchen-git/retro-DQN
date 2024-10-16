@@ -8,7 +8,15 @@
       "address": 86,
       "type": "|u1"
     },
+<<<<<<< Updated upstream
     "piece_y_pos_pun": {
+=======
+    "piece_id": {
+      "address": 66,
+      "type": "|u2"
+    },
+    "piece_y_pos": {
+>>>>>>> Stashed changes
       "address": 65,
       "type": "|u1"
     },
