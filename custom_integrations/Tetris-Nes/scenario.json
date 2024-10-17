@@ -8,65 +8,20 @@
   "done": {
     "variables": {
       "gameover": {
-        "op": "equal",
-        "reference": 1
-      },
-      "row11_0": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
-      },
-      "row11_1": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
-      },
-      "row11_2": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
-      },
-      "row11_3": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
-      },
-      "row11_4": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
-      },
-      "row11_5": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
-      },
-      "row11_6": {
-        "measurement": "absolute",
-        "op": "not-equal",
-        "reference": 5
-      },
-      "row11_7": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
-      },
-      "row11_8": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
-      },
-      "row11_9": {
-        "measurement": "absolute",
-		"op": "not-equal",
-        "reference": 5
+        "op": "greater-than",
+        "reference": 2
       }
     }
   },
   "reward": {
     "variables": {
-      "score": {
-        "reward": 1
+      "lines_being_cleared": {
+        "reward": 100
+      },
+      "gameover": {
+        "op": "greater-than",
+        "reference": 2,
+        "reward": -5
       }
     }
   }

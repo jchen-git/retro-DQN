@@ -12,6 +12,10 @@
       "address": 86,
       "type": "|u1"
     },
+    "piece_id": {
+      "address": 66,
+      "type": "|u2"
+    },
     "piece_y_pos": {
       "address": 65,
       "type": "|u1"
