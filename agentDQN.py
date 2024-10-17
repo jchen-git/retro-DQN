@@ -48,12 +48,12 @@ class Agent:
             # RIGHT
             3: [0, 0, 0, 0, 0, 0, 0, 1, 0]
         }
-        self.policy_net = DQN(self.input_shape, len(self.actions), self.hidden_layer_num).to(device)
+        self.policy_net = DQN(self.input_shape, self.hidden_layer_num).to(device)
 
         self.loss_fn = torch.nn.MSELoss()
 
         self.replay_memory = ReplayMemory(self.replay_memory_size, self.mini_batch_size, device)
-        self.target_net = DQN(self.input_shape, len(self.actions), self.hidden_layer_num).to(device)
+        self.target_net = DQN(self.input_shape, self.hidden_layer_num).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
 
@@ -92,17 +92,9 @@ class Agent:
 
     def act(self, states):
         if random.random() > self.epsilon:
-            max_rating = None
-            best_state = None
             with torch.no_grad():
                 ratings = self.policy_net(torch.tensor([state for i, (action, state) in enumerate(states)], device=device, dtype=torch.float))
-
-                for i, (action, state) in enumerate(states):
-                    rating = ratings[i]
-                    if not max_rating or rating > max_rating:
-                        max_rating = rating
-                        best_state = (action, state)
-            return best_state
+            return states[ratings.argmax()]
         else:
             return random.choice(states)
 
