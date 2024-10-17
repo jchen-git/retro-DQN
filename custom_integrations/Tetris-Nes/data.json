@@ -20,10 +20,6 @@
       "address": 65,
       "type": "|u1"
     },
-    "piece_y_pos_rew": {
-      "address": 65,
-      "type": "|u1"
-    },
     "row11_0": {
       "address": 1134,
       "type": "|n1"

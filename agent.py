@@ -26,11 +26,11 @@ class Agent:
 
         self.hidden_layer_num = hyperparam['hidden_layers']        # Number of hidden layers to use for linear nn layers
         self.replay_memory_size = hyperparam['replay_memory_size'] # Size of replay memory
-        self.batch_size = hyperparam['batch_size']                 # Size of training data set to be sampled from replay memory
+        self.mini_batch_size = hyperparam['mini_batch_size']                 # Size of training data set to be sampled from replay memory
         self.epsilon = hyperparam['epsilon_init']                  # 1 - 100% random actions
         self.epsilon_decay = hyperparam['epsilon_decay']           # epsilon decay rate
         self.epsilon_min = hyperparam['epsilon_min']               # minimum epsilon value
-        self.network_sync_rate = hyperparam['network_sync_rate']   # Target step count to sync the policy and target nets
+        self.update_rate = hyperparam['update_rate']               # Target step count to run the optimize function
         self.learning_rate = hyperparam['learning_rate']           # Learning rate for training
         self.GAMMA = hyperparam['GAMMA']                           # Discount factor gamma for DQN algorithm
         self.epoch = hyperparam['epoch']                           # Amount of games to train for
@@ -44,28 +44,16 @@ class Agent:
             0: [1, 0, 0, 0, 0, 0, 0, 0, 0],
             # No Operation
             1: [0, 1, 0, 0, 0, 0, 0, 0, 0],
-            # LEFT + B
-            2: [1, 0, 0, 0, 0, 0, 1, 0, 0],
-            # LEFT + A
-            3: [0, 0, 0, 0, 0, 0, 1, 0, 1],
-            # RIGHT + B
-            4: [1, 0, 0, 0, 0, 0, 0, 1, 0],
-            # DOWN
-            5: [0, 0, 0, 0, 0, 1, 0, 0, 0],
             # LEFT
-            6: [0, 0, 0, 0, 0, 0, 1, 0, 0],
+            2: [0, 0, 0, 0, 0, 0, 1, 0, 0],
             # RIGHT
-            7: [0, 0, 0, 0, 0, 0, 0, 1, 0],
-            # A
-            8: [0, 0, 0, 0, 0, 0, 0, 0, 1],
-            # RIGHT + A
-            9: [0, 0, 0, 0, 0, 0, 0, 1, 1]
+            3: [0, 0, 0, 0, 0, 0, 0, 1, 0]
         }
         self.policy_net = DQN(self.input_shape, len(self.actions), self.hidden_layer_num).to(device)
 
         self.loss_fn = torch.nn.MSELoss()
 
-        self.replay_memory = ReplayMemory(self.replay_memory_size, self.batch_size, device)
+        self.replay_memory = ReplayMemory(self.replay_memory_size, self.mini_batch_size, device)
         self.target_net = DQN(self.input_shape, len(self.actions), self.hidden_layer_num).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
@@ -88,14 +76,15 @@ class Agent:
         dones = torch.tensor(dones, device=device, dtype=torch.float)
 
         # Compute the expected Q values
-        with torch.no_grad():
-            expected_q = (1 - dones) * self.target_net(next_states).max(1).values * self.GAMMA + rewards
+        expected_q = (1 - dones) * self.target_net(next_states).max(1).values * self.GAMMA + rewards
 
         # Expected Q values using the policy network
         current_q = self.policy_net(states).gather(1, actions)
 
         # Compute loss
         loss = self.loss_fn(current_q, expected_q.unsqueeze(1))
+
+        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -105,7 +94,6 @@ class Agent:
 
     # Run the input through the policy network
     def act(self, curr_state):
-        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
         # Epsilon-greedy action selection
         if random.random() > self.epsilon:
             with torch.no_grad():

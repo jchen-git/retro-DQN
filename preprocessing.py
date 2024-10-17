@@ -5,9 +5,8 @@ import cv2
 # crop: Tuple in this format (y, y+h, x, x+w)
 # output: Output square image of a given size
 def preprocess(screen, crop, output):
-    # Convert image to strictly black and white
+    # Convert image to grayscale
     screen = cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
-    screen = cv2.threshold(screen, 1, 255, cv2.THRESH_BINARY)[1]
 
     # Crop screen [Top:Bot, Left:Right]
     screen = screen[crop[0]:crop[1], crop[2]:crop[3]]
@@ -19,7 +18,7 @@ def preprocess(screen, crop, output):
     screen = cv2.resize(screen, (output, output), interpolation=cv2.INTER_NEAREST)
     return screen
 
-
+# Used for games with motion involved
 def stack_frame(stacked_frames, frame, new):
     if new:
         stacked_frames = np.stack(arrays=[frame, frame, frame, frame])

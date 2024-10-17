@@ -13,6 +13,7 @@ from preprocessing import preprocess, stack_frame
 # TODO
 # Change rewards given such that bottom four rows should be filled
 # Create GUI
+# Check why flat I piece (id 18) desyncs the state
 
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -62,7 +63,7 @@ pieces = {
     17:[[0,1,2,3],
         [5,5,5,5]],
     18:[[0,0,0,0],
-        [4,5,6,3]]
+        [3,4,5,6]]
     }
 
 class Piece:
@@ -165,6 +166,7 @@ def get_possible_states(p_id, curr_board):
                     actions_list.append(rotate)
                 for i in range(left_moves):
                     actions_list.append([0,0,0,0,0,0,1,0,0])
+                actions_list.append([0, 0, 0, 0, 0, 1, 0, 0, 0])
                 action_states.append((actions_list, get_info(test_board)))
             test_board = base_board.copy()
             left_moves -= 1
@@ -186,6 +188,7 @@ def get_possible_states(p_id, curr_board):
                     actions_list.append(rotate)
                 for i in range(right_moves):
                     actions_list.append([0,0,0,0,0,0,0,1,0])
+                actions_list.append([0, 0, 0, 0, 0, 1, 0, 0, 0])
                 action_states.append((actions_list, get_info(test_board)))
             test_board = base_board.copy()
             right_moves -= 1
@@ -311,6 +314,9 @@ with open(agent.LOG_FILE, 'w') as file:
 if os.path.isfile(agent.DATA_FILE):
     with open(agent.DATA_FILE, 'r') as file:
         best_reward = float(file.read())
+else:
+    with open(agent.DATA_FILE, 'w') as file:
+        file.write(str(best_reward))
 
 if os.path.isfile(agent.MODEL_FILE):
     agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
@@ -368,6 +374,9 @@ for episode in range(agent.epoch):
             piece_id = obs[0x0042]
 
             rew -= state[3] * 0.035
+
+            if get_info(board) != state:
+                print()
 
             actions = torch.tensor(actions, device=device, dtype=torch.int64)
             state = torch.tensor([state], device=device, dtype=torch.float)
