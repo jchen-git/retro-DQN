@@ -4,7 +4,7 @@ An implementation of a Deep Q Network used to train an AI to play Tetris.
 ## Requirements
 The preferred version of Python is:
 
-```shell
+```
 Python 3.8
 ```
 
@@ -29,3 +29,5 @@ If you have an existing model and want to run a play session, you can use:
 ```shell
 python ./tetrisDQN_play.py
 ```
+
+An existing pre-trained model is included in the repository. To use the pre-trained model, rename tetris_best.pt to tetris.pt.
