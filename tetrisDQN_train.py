@@ -1,23 +1,23 @@
 import os
-import random
-#import gym
-import retro
+import gym_tetris
 import torch
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
+from nes_py.wrappers import JoypadSpace
+from gym_tetris.actions import SIMPLE_MOVEMENT
 from agentDQN import Agent
-from preprocessing import preprocess, stack_frame
 
 # TODO
-# Change rewards given such that bottom four rows should be filled
 # Create GUI
-# Check why flat I piece (id 18) desyncs the state
+# Remember to reenable rendering
 
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+##
+# Used to get all possible end states of the current game state and get features from the end states
 pieces = {
     # T
     0:[[1,1,1,0],
@@ -63,14 +63,14 @@ pieces = {
     17:[[0,1,2,3],
         [5,5,5,5]],
     18:[[0,0,0,0],
+        [3,4,5,6]],
+    19:[[0,0,0,0],
         [3,4,5,6]]
     }
 
 class Piece:
     def __init__(self, p_id):
         self.x, self.y = np.array(pieces[p_id])
-        self.x_bounds = [4,6]
-        self.y_bounds = [2,5]
 
         if p_id in [0,1,2,3]:
             self.rotations = [2,3,0,1]
@@ -82,22 +82,23 @@ class Piece:
             self.rotations = [8,9]
         elif p_id in [11,12]:
             self.rotations = [11,12]
-        elif p_id in [17,18]:
+        elif p_id in [17,18,19]:
             self.rotations = [18,17]
         elif p_id == 10:
             self.rotations = [10]
 
 def get_info(curr_board):
+    line_clears, line_cleared_board = get_line_clears(curr_board)
     return [
-        get_line_clears(curr_board),
-        get_bumpiness(np.transpose(curr_board)),
-        get_agg_height(np.transpose(curr_board)),
-        get_holes(np.transpose(curr_board)),
-        get_high_low(np.transpose(curr_board))
+        line_clears,
+        get_bumpiness(np.transpose(line_cleared_board)),
+        get_agg_height(np.transpose(line_cleared_board)),
+        get_holes(np.transpose(line_cleared_board)),
+        get_high_low(np.transpose(line_cleared_board))
     ]
 
 def check_valid(piece, curr_board):
-    if (piece.x < 0).sum() > 0 or 20 in piece.x:
+    if (piece.x < 0).sum() > 0 or (piece.x > 19).sum() > 0:
         piece.x -= 1
         return False
     for i in range(4):
@@ -107,9 +108,6 @@ def check_valid(piece, curr_board):
     return True
 
 def drop(piece, moves, curr_board):
-    for i in range(4):
-        curr_board[piece.x[i]][piece.y[i]] = 0
-
     piece.y -= moves
 
     if (piece.y < 0).sum() > 0 or 10 in piece.y:
@@ -117,8 +115,9 @@ def drop(piece, moves, curr_board):
 
     while check_valid(piece, curr_board):
         piece.x += 1
-        if not check_valid(piece, curr_board):
-            break
+
+    if (piece.x == 1).sum() > 0:
+        return False
 
     for i in range(4):
         if curr_board[piece.x[i]][piece.y[i]] == 1:
@@ -126,11 +125,6 @@ def drop(piece, moves, curr_board):
         else:
             curr_board[piece.x[i]][piece.y[i]] = 1
     return True
-
-def place_piece(piece, curr_board):
-    for i in range(4):
-        curr_board[piece.x[i]][piece.y[i]] = 1
-    return curr_board
 
 def get_possible_states(p_id, curr_board):
     # List of tuple containing (action, board state)
@@ -144,10 +138,10 @@ def get_possible_states(p_id, curr_board):
     for rotation_id in piece.rotations:
         rotations = []
         for i in range(rotation_num):
-            rotations.append([0,0,0,0,0,0,0,0,1])
+            rotations.append(1)
         rotation_num += 1
 
-        # Double check
+        # Check available left input end states
         if rotation_id in [1, 6, 9, 12, 13, 17]:
             left_moves = 5
         elif rotation_id in [0, 2, 3, 4, 5, 7, 8, 10, 11, 14, 15, 16]:
@@ -157,21 +151,21 @@ def get_possible_states(p_id, curr_board):
         else:
             left_moves = 0
 
-        for col in range(0,5):
+        while left_moves >= 0:
             piece = Piece(rotation_id)
-            place_piece(piece, test_board)
             if drop(piece, left_moves, test_board):
                 actions_list=[]
                 for rotate in rotations:
                     actions_list.append(rotate)
+                    actions_list.append(0)
                 for i in range(left_moves):
-                    actions_list.append([0,0,0,0,0,0,1,0,0])
-                actions_list.append([0, 0, 0, 0, 0, 1, 0, 0, 0])
+                    actions_list.append(4)
+                    actions_list.append(0)
                 action_states.append((actions_list, get_info(test_board)))
             test_board = base_board.copy()
             left_moves -= 1
 
-        # Double check
+        # Check available right input end states
         if rotation_id in [3, 4, 10, 15, 17]:
             right_moves = 4
         elif rotation_id in [0, 1, 2, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18]:
@@ -179,22 +173,22 @@ def get_possible_states(p_id, curr_board):
         else:
             right_moves = 0
 
-        for col in range(9,5,-1):
+        while right_moves >= 0:
             piece = Piece(rotation_id)
-            place_piece(piece, test_board)
             if drop(piece, -right_moves, test_board):
                 actions_list=[]
                 for rotate in rotations:
                     actions_list.append(rotate)
+                    actions_list.append(0)
                 for i in range(right_moves):
-                    actions_list.append([0,0,0,0,0,0,0,1,0])
-                actions_list.append([0, 0, 0, 0, 0, 1, 0, 0, 0])
+                    actions_list.append(3)
+                    actions_list.append(0)
                 action_states.append((actions_list, get_info(test_board)))
             test_board = base_board.copy()
             right_moves -= 1
 
     if len(action_states) == 0:
-        action_states.append(([[0, 0, 0, 0, 0, 1, 0, 0, 0]],get_info(test_board)))
+        action_states.append(([0], get_info(test_board)))
 
     return action_states
 
@@ -203,8 +197,12 @@ def get_line_clears(curr_board):
     for i in range(len(curr_board)):
         if (curr_board[i] == 1).all():
             line_clears += 1
-    return line_clears
-
+            curr_board[i] = [0]
+            for j in range((i - 1), 0, -1):
+                curr_board[j + 1] = curr_board[j]
+                if all(curr_board[j] == 0):
+                    break
+    return line_clears, curr_board
 
 def get_bumpiness(curr_board):
     bumpiness_num = 0
@@ -218,13 +216,6 @@ def get_bumpiness(curr_board):
             bumpiness_num += abs(last_height - current_height)
         last_height = current_height
     return bumpiness_num
-
-# def get_col_heights(curr_board):
-#     heights = [0,0,0,0,0,0,0,0,0,0]
-#     for i in range(len(curr_board)):
-#         if curr_board[i].any():
-#             heights[i] = 20 - np.where(curr_board[i] == 1)[0][0]
-#     return heights
 
 def get_agg_height(curr_board):
     height = 0
@@ -250,12 +241,12 @@ def get_high_low(curr_board):
             h = 20 - np.where(curr_board[i] == 1)[0][0]
         else:
             h = 0
-
         if h > max_h:
             max_h = h
         if h < min_h:
             min_h = h
     return max_h - min_h
+##
 
 def create_graph(name, variable, x_label, y_label):
     # Save plots
@@ -277,34 +268,26 @@ def create_graph(name, variable, x_label, y_label):
 # Set path for custom ROMs
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-SAVE_STATES = [os.path.join(root, name)
-             for root, dirs, files in os.walk(os.path.join(SCRIPT_DIR, 'custom_integrations'))
-             for name in files
-             if name.endswith(".state")]
-
-retro.data.Integrations.add_custom_path(
-    os.path.join(SCRIPT_DIR, 'custom_integrations')
-)
-
 matplotlib.use('Agg')
 
 # Tetris game
-env = retro.make("Tetris-Nes", state=SAVE_STATES[0], inttype=retro.data.Integrations.ALL, obs_type=retro.Observations.RAM)
-IMAGE_CROP = (35, 204, 85, 170)
-#INPUT_SHAPE = (4, 84, 84)
+env = gym_tetris.make("TetrisA-v3")
+env = JoypadSpace(env, SIMPLE_MOVEMENT)
 INPUT_SHAPE = 5
-agent = Agent(INPUT_SHAPE,"tetris", training=True)
-
 is_training = True
+agent = Agent(INPUT_SHAPE,"tetris", is_training)
+
+# Logging variables
 rewards_per_episode = []
 score_per_episode = []
 avg_holes_per_episode = []
-avg_agg_height_per_ep = []
 avg_bump_per_episode = []
 line_clears_per_ep = []
 epsilon_history = []
+
 best_reward = -999.0
 timestep = 0
+render_game = False
 
 log_message=f"{datetime.now()}: Training..."
 print(log_message)
@@ -322,8 +305,8 @@ if os.path.isfile(agent.MODEL_FILE):
     agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
 
 for episode in range(agent.epoch):
-    #env.load_state(random.choice(SAVE_STATES))
-    obs = env.reset()
+    env.reset()
+    obs = env.ram
     board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
     board[board == 239] = 0
     board[board != 0] = 1
@@ -332,7 +315,6 @@ for episode in range(agent.epoch):
     prev_state = torch.tensor([prev_state], device=device, dtype=torch.float)
 
     ep_bump = []
-    ep_agg_height = []
     ep_holes = []
     ep_line_clears = []
     ep_reward = 0.0
@@ -340,43 +322,43 @@ for episode in range(agent.epoch):
     can_move = True
 
     while not done:
-        current_step = 0
-        total_reward = 0
-        env.render()
-
-        obs, rew, done, info = env.step([0, 0, 0, 0, 0, 1, 0, 0, 0])
+        ___, rew, done, info = env.step(5)
+        if render_game:
+            env.render()
+        obs = env.ram
 
         if not done:
             rew += 1
         ep_reward += rew
 
-        if int(info['piece_y_pos']) == 1 and can_move:
+        # 0x0041 in RAM refers to the current Tetris piece y position
+        if obs[0x0041] == 0 and can_move:
             board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
             board[board == 239] = 0
             board[board != 0] = 1
             piece_id = obs[0x0042]
             actions, state = agent.act(get_possible_states(piece_id, board))
             for action in actions:
-                obs, rew, done, info = env.step(action)
-                obs, rew, done, info = env.step([0,1,0,0,0,0,0,0,0])
-                ep_reward += rew
+                if not done:
+                    ___, rew, done, info = env.step(action)
+                    if render_game:
+                        env.render()
+                    ep_reward += rew
+            if not done:
+                ___, rew, done, info = env.step(0)
+            if render_game:
+                env.render()
+            obs = env.ram
 
-            ep_bump.append(state[1])
-            ep_agg_height.append(state[2])
-            ep_holes.append(state[3])
+            if is_training:
+                ep_bump.append(state[1])
+                ep_holes.append(state[3])
 
             can_move = False
 
-        if int(info['game_phase'] == 6 and not can_move):
-            board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
-            board[board == 239] = 0
-            board[board != 0] = 1
-            piece_id = obs[0x0042]
-
-            rew -= state[3] * 0.035
-
-            if get_info(board) != state:
-                print()
+        # 0x0048 refers to the current Tetris game phase. > 7 is after the score counter update and line clear animations
+        if obs[0x0048] > 7 and not can_move:
+            rew -= state[3] * 0.1
 
             actions = torch.tensor(actions, device=device, dtype=torch.int64)
             state = torch.tensor([state], device=device, dtype=torch.float)
@@ -386,24 +368,23 @@ for episode in range(agent.epoch):
             prev_state = state
             can_move = True
 
-        timestep += 1
+        if is_training:
+            timestep += 1
 
-        if timestep > agent.update_rate:
-            if (len(agent.replay_memory)) > agent.mini_batch_size:
-                agent.optimize()
-            timestep = 0
-
-
-    # Logs
-    avg_bump_per_episode.append(sum(ep_bump) / len(ep_bump))
-    avg_agg_height_per_ep.append(sum(ep_agg_height) / len(ep_agg_height))
-    avg_holes_per_episode.append(sum(ep_holes) / len(ep_holes))
-    line_clears_per_ep.append(ep_line_clears)
-    rewards_per_episode.append(ep_reward)
-    score_per_episode.append(int(info['score']))
-    epsilon_history.append(agent.epsilon)
+            if timestep > agent.update_rate:
+                if (len(agent.replay_memory)) > agent.mini_batch_size:
+                    agent.optimize()
+                timestep = 0
 
     if is_training:
+        # Logging variables to save to an image
+        avg_bump_per_episode.append(sum(ep_bump) / len(ep_bump))
+        avg_holes_per_episode.append(sum(ep_holes) / len(ep_holes))
+        line_clears_per_ep.append(ep_line_clears)
+        rewards_per_episode.append(ep_reward)
+        score_per_episode.append(int(info['score']))
+        epsilon_history.append(agent.epsilon)
+
         if ep_reward > best_reward:
             log_message= f"{datetime.now()}: New best reward: {ep_reward:0.2f} at episode {episode}"
             print(log_message)
@@ -421,9 +402,9 @@ for episode in range(agent.epoch):
             print(log_message)
             create_graph('rewards', rewards_per_episode, 'episode', 'reward')
             create_graph('bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
-            create_graph('agg_height', avg_agg_height_per_ep, 'episode', 'avg. agg. height')
             create_graph('holes', avg_holes_per_episode, 'episode', 'avg. holes')
             create_graph('epsilon', epsilon_history, 'episode', 'epsilon')
+            create_graph('score', score_per_episode, 'episode', 'score')
 
 env.close()
 
