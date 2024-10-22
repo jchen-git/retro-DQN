@@ -1,14 +1,15 @@
 import os
 import gym_tetris
 import torch
+import sys
 import numpy as np
 from datetime import datetime
 from nes_py.wrappers import JoypadSpace
 from gym_tetris.actions import SIMPLE_MOVEMENT
 from agentDQN import Agent
 
-# TODO
-# Create GUI
+# if GPU is to be used
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ##
 # Used to get all possible end states of the current game state and get features from the end states
@@ -242,75 +243,69 @@ def get_high_low(curr_board):
     return max_h - min_h
 ##
 
-# Tetris game
-env = gym_tetris.make("TetrisA-v3")
-env = JoypadSpace(env, SIMPLE_MOVEMENT)
-INPUT_SHAPE = 5
-is_training = False
-agent = Agent(INPUT_SHAPE,"tetris", is_training)
+def run(episode_total):
+    # Tetris game
+    env = gym_tetris.make("TetrisA-v3")
+    env = JoypadSpace(env, SIMPLE_MOVEMENT)
+    INPUT_SHAPE = 5
+    is_training = False
+    agent = Agent(INPUT_SHAPE,"tetris", is_training)
 
-# Logging variables
-rewards_per_episode = []
-score_per_episode = []
-avg_holes_per_episode = []
-avg_bump_per_episode = []
-line_clears_per_ep = []
-epsilon_history = []
+    log_message=f"{datetime.now()}: Playing..."
+    print(log_message)
+    with open(agent.LOG_FILE, 'w') as file:
+        file.write(log_message + '\n')
 
-best_reward = -999.0
-timestep = 0
+    if os.path.isfile(agent.MODEL_FILE):
+        agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
 
-log_message=f"{datetime.now()}: Playing..."
-print(log_message)
-with open(agent.LOG_FILE, 'w') as file:
-    file.write(log_message + '\n')
-
-if os.path.isfile(agent.DATA_FILE):
-    with open(agent.DATA_FILE, 'r') as file:
-        best_reward = float(file.read())
-else:
-    with open(agent.DATA_FILE, 'w') as file:
-        file.write(str(best_reward))
-
-if os.path.isfile(agent.MODEL_FILE):
-    agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
-
-for episode in range(5):
-    env.reset()
-    obs = env.ram
-    board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
-    board[board == 239] = 0
-    board[board != 0] = 1
-    piece_id = obs[0x0042]
-
-    done = False
-    can_move = True
-
-    while not done:
-        ___, rew, done, info = env.step(5)
-        env.render()
+    for episode in range(episode_total):
+        env.reset()
         obs = env.ram
+        board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
+        board[board == 239] = 0
+        board[board != 0] = 1
+        piece_id = obs[0x0042]
 
-        if obs[0x0041] == 0 and can_move:
-            board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
-            board[board == 239] = 0
-            board[board != 0] = 1
-            piece_id = obs[0x0042]
-            actions, state = agent.act(get_possible_states(piece_id, board))
-            for action in actions:
-                ___, rew, done, info = env.step(action)
-                env.render()
-            ___, rew, done, info = env.step(0)
+        done = False
+        can_move = True
+
+        while not done:
+            ___, rew, done, info = env.step(5)
             env.render()
             obs = env.ram
-            can_move = False
 
-        if obs[0x0048] > 5 and not can_move:
-            can_move = True
+            if obs[0x0041] == 0 and can_move:
+                board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
+                board[board == 239] = 0
+                board[board != 0] = 1
+                piece_id = obs[0x0042]
+                actions, state = agent.act(get_possible_states(piece_id, board))
+                for action in actions:
+                    if not done:
+                        ___, rew, done, info = env.step(action)
+                        env.render()
+                if not done:
+                    ___, rew, done, info = env.step(0)
+                    env.render()
+                    obs = env.ram
+                can_move = False
 
-env.close()
+            if obs[0x0048] > 7 and not can_move:
+                can_move = True
 
-log_message=f"{datetime.now()}: Episodes Complete"
-print(log_message)
-with open(agent.LOG_FILE, 'a') as file:
-    file.write(log_message + '\n')
+    env.close()
+
+    log_message=f"{datetime.now()}: Episodes Complete"
+    print(log_message)
+    with open(agent.LOG_FILE, 'a') as file:
+        file.write(log_message + '\n')
+
+if __name__ == '__main__':
+    args = sys.argv
+    if '--episodes' in args:
+        episodes = int(args[2])
+    else:
+        episodes = 1
+
+    run(episodes)

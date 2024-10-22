@@ -1,6 +1,7 @@
 import os
 import gym_tetris
 import torch
+import sys
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,10 +9,6 @@ from datetime import datetime
 from nes_py.wrappers import JoypadSpace
 from gym_tetris.actions import SIMPLE_MOVEMENT
 from agentDQN import Agent
-
-# TODO
-# Create GUI
-# Remember to reenable rendering
 
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -248,7 +245,7 @@ def get_high_low(curr_board):
     return max_h - min_h
 ##
 
-def create_graph(name, variable, x_label, y_label):
+def create_graph(dir, name, variable, x_label, y_label):
     # Save plots
     fig = plt.figure(1)
     durations_t = torch.tensor(variable, dtype=torch.float)
@@ -262,7 +259,7 @@ def create_graph(name, variable, x_label, y_label):
         plt.plot(means.numpy())
 
     # Save plots
-    fig.savefig(os.path.join(agent.GRAPH_FILE, f'_{name}.png'))
+    fig.savefig(os.path.join(dir, f'_{name}.png'))
     plt.close(fig)
 
 # Set path for custom ROMs
@@ -270,105 +267,103 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 matplotlib.use('Agg')
 
-# Tetris game
-env = gym_tetris.make("TetrisA-v3")
-env = JoypadSpace(env, SIMPLE_MOVEMENT)
-INPUT_SHAPE = 5
-is_training = True
-agent = Agent(INPUT_SHAPE,"tetris", is_training)
+def run(render_game):
+    # Tetris game
+    env = gym_tetris.make("TetrisA-v3")
+    env = JoypadSpace(env, SIMPLE_MOVEMENT)
+    INPUT_SHAPE = 5
+    is_training = True
+    agent = Agent(INPUT_SHAPE,"tetris", is_training)
 
-# Logging variables
-rewards_per_episode = []
-score_per_episode = []
-avg_holes_per_episode = []
-avg_bump_per_episode = []
-line_clears_per_ep = []
-epsilon_history = []
+    # Logging variables
+    rewards_per_episode = []
+    score_per_episode = []
+    avg_holes_per_episode = []
+    avg_bump_per_episode = []
+    line_clears_per_ep = []
+    epsilon_history = []
 
-best_reward = -999.0
-timestep = 0
-render_game = False
+    best_reward = -999.0
+    timestep = 0
 
-log_message=f"{datetime.now()}: Training..."
-print(log_message)
-with open(agent.LOG_FILE, 'w') as file:
-    file.write(log_message + '\n')
+    log_message=f"{datetime.now()}: Training..."
+    print(log_message)
+    with open(agent.LOG_FILE, 'w') as file:
+        file.write(log_message + '\n')
 
-if os.path.isfile(agent.DATA_FILE):
-    with open(agent.DATA_FILE, 'r') as file:
-        best_reward = float(file.read())
-else:
-    with open(agent.DATA_FILE, 'w') as file:
-        file.write(str(best_reward))
+    if os.path.isfile(agent.DATA_FILE):
+        with open(agent.DATA_FILE, 'r') as file:
+            best_reward = float(file.read())
+    else:
+        with open(agent.DATA_FILE, 'w') as file:
+            file.write(str(best_reward))
 
-if os.path.isfile(agent.MODEL_FILE):
-    agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
+    if os.path.isfile(agent.MODEL_FILE):
+        agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
 
-for episode in range(agent.epoch):
-    env.reset()
-    obs = env.ram
-    board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
-    board[board == 239] = 0
-    board[board != 0] = 1
-    piece_id = obs[0x0042]
-    prev_state = get_info(board)
-    prev_state = torch.tensor([prev_state], device=device, dtype=torch.float)
-
-    ep_bump = []
-    ep_holes = []
-    ep_line_clears = []
-    ep_reward = 0.0
-    done = False
-    can_move = True
-
-    while not done:
-        ___, rew, done, info = env.step(5)
-        if render_game:
-            env.render()
+    for episode in range(agent.epoch):
+        env.reset()
         obs = env.ram
+        board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
+        board[board == 239] = 0
+        board[board != 0] = 1
+        piece_id = obs[0x0042]
+        prev_state = get_info(board)
+        prev_state = torch.tensor([prev_state], device=device, dtype=torch.float)
 
-        if not done:
-            rew += 1
-        ep_reward += rew
+        ep_bump = []
+        ep_holes = []
+        ep_line_clears = []
+        ep_reward = 0.0
+        done = False
+        can_move = True
 
-        # 0x0041 in RAM refers to the current Tetris piece y position
-        if obs[0x0041] == 0 and can_move:
-            board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
-            board[board == 239] = 0
-            board[board != 0] = 1
-            piece_id = obs[0x0042]
-            actions, state = agent.act(get_possible_states(piece_id, board))
-            for action in actions:
-                if not done:
-                    ___, rew, done, info = env.step(action)
-                    if render_game:
-                        env.render()
-                    ep_reward += rew
-            if not done:
-                ___, rew, done, info = env.step(0)
+        while not done:
+            ___, rew, done, info = env.step(5)
             if render_game:
                 env.render()
             obs = env.ram
 
-            if is_training:
+            if not done:
+                rew += 1
+            ep_reward += rew
+
+            # 0x0041 in RAM refers to the current Tetris piece y position
+            if obs[0x0041] == 0 and can_move:
+                board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
+                board[board == 239] = 0
+                board[board != 0] = 1
+                piece_id = obs[0x0042]
+                actions, state = agent.act(get_possible_states(piece_id, board))
+                for action in actions:
+                    if not done:
+                        ___, rew, done, info = env.step(action)
+                        if render_game:
+                            env.render()
+                        ep_reward += rew
+                if not done:
+                    ___, rew, done, info = env.step(0)
+                if render_game:
+                    env.render()
+                obs = env.ram
+
                 ep_bump.append(state[1])
                 ep_holes.append(state[3])
 
-            can_move = False
+                can_move = False
 
-        # 0x0048 refers to the current Tetris game phase. > 7 is after the score counter update and line clear animations
-        if obs[0x0048] > 7 and not can_move:
-            rew -= state[3] * 0.035
+            # 0x0048 refers to the current Tetris game phase. > 7 is after the score counter update and line clear animations
+            if obs[0x0048] > 7 and not can_move:
+                rew -= state[3] * 0.035
 
-            actions = torch.tensor(actions, device=device, dtype=torch.int64)
-            state = torch.tensor([state], device=device, dtype=torch.float)
-            rew = torch.tensor([rew], device=device, dtype=torch.float)
-            done = torch.tensor(done, device=device, dtype=torch.float)
-            agent.replay_memory.append(prev_state, actions, rew, state, done)
-            prev_state = state
-            can_move = True
+                actions = torch.tensor(actions, device=device, dtype=torch.int64)
+                state = torch.tensor([state], device=device, dtype=torch.float)
+                rew = torch.tensor([rew], device=device, dtype=torch.float)
+                done = torch.tensor(done, device=device, dtype=torch.float)
+                agent.replay_memory.append(prev_state, actions, rew, state, done)
+                prev_state = state
+                can_move = True
 
-        if is_training:
             timestep += 1
 
             if timestep > agent.update_rate:
@@ -376,7 +371,6 @@ for episode in range(agent.epoch):
                     agent.optimize()
                 timestep = 0
 
-    if is_training:
         # Logging variables to save to an image
         avg_bump_per_episode.append(sum(ep_bump) / len(ep_bump))
         avg_holes_per_episode.append(sum(ep_holes) / len(ep_holes))
@@ -400,15 +394,24 @@ for episode in range(agent.epoch):
         if episode % 50 == 0:
             log_message = f"{datetime.now()}: Episode {episode} complete"
             print(log_message)
-            create_graph('rewards', rewards_per_episode, 'episode', 'reward')
-            create_graph('bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
-            create_graph('holes', avg_holes_per_episode, 'episode', 'avg. holes')
-            create_graph('epsilon', epsilon_history, 'episode', 'epsilon')
-            create_graph('score', score_per_episode, 'episode', 'score')
+            create_graph(agent.GRAPH_FILE, 'rewards', rewards_per_episode, 'episode', 'reward')
+            create_graph(agent.GRAPH_FILE, 'bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
+            create_graph(agent.GRAPH_FILE, 'holes', avg_holes_per_episode, 'episode', 'avg. holes')
+            create_graph(agent.GRAPH_FILE, 'epsilon', epsilon_history, 'episode', 'epsilon')
+            create_graph(agent.GRAPH_FILE, 'score', score_per_episode, 'episode', 'score')
 
-env.close()
+    env.close()
 
-log_message=f"{datetime.now()}: Training Complete"
-print(log_message)
-with open(agent.LOG_FILE, 'a') as file:
-    file.write(log_message + '\n')
+    log_message=f"{datetime.now()}: Training Complete"
+    print(log_message)
+    with open(agent.LOG_FILE, 'a') as file:
+        file.write(log_message + '\n')
+
+if __name__ == '__main__':
+    args = sys.argv
+    if '--render' in args:
+        render = True
+    else:
+        render = False
+
+    run(render_game=render)
