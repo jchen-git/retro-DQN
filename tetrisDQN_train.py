@@ -358,7 +358,7 @@ for episode in range(agent.epoch):
 
         # 0x0048 refers to the current Tetris game phase. > 7 is after the score counter update and line clear animations
         if obs[0x0048] > 7 and not can_move:
-            rew -= state[3] * 0.1
+            rew -= state[3] * 0.035
 
             actions = torch.tensor(actions, device=device, dtype=torch.int64)
             state = torch.tensor([state], device=device, dtype=torch.float)

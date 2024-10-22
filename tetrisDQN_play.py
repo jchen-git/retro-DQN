@@ -275,7 +275,7 @@ else:
 if os.path.isfile(agent.MODEL_FILE):
     agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True))
 
-for episode in range(agent.epoch):
+for episode in range(5):
     env.reset()
     obs = env.ram
     board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))

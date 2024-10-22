@@ -1,17 +1,3 @@
-cart:
-  env_id: CartPole-v1
-  hidden_layers: 256
-  replay_memory_size: 10000
-  batch_size: 128
-  epsilon_init: 1
-  epsilon_decay: 0.9995
-  epsilon_min: 0.01
-  network_sync_rate: 100
-  learning_rate: 0.00025
-  GAMMA: 0.95
-  TAU: 0.05
-  epoch: 200
-
 tetris:
   env_id: Tetris-Nes
   hidden_layers: 256
@@ -21,7 +7,7 @@ tetris:
   epsilon_decay: 0.9995
   epsilon_min: 0.01
   update_rate: 100
-  learning_rate: 0.0001
+  learning_rate: 0.00025
   GAMMA: 0.95
   TAU: 0.0001
-  epoch: 500
+  epoch: 300
