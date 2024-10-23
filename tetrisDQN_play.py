@@ -243,7 +243,7 @@ def get_high_low(curr_board):
     return max_h - min_h
 ##
 
-def run(episode_total):
+def run(episode_total, ai_model):
     # Tetris game
     env = gym_tetris.make("TetrisA-v3")
     env = JoypadSpace(env, SIMPLE_MOVEMENT)
@@ -256,7 +256,9 @@ def run(episode_total):
     with open(agent.LOG_FILE, 'w') as file:
         file.write(log_message + '\n')
 
-    if os.path.isfile(agent.MODEL_FILE):
+    if ai_model != '':
+        agent.policy_net.load_state_dict(torch.load(ai_model, weights_only=True, map_location=device))
+    elif os.path.isfile(agent.MODEL_FILE):
         agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
 
     for episode in range(episode_total):
@@ -308,4 +310,9 @@ if __name__ == '__main__':
     else:
         episodes = 1
 
-    run(episodes)
+    if '--best-model' in args:
+        model = 'models/best.pt'
+    else:
+        model = 'models/tetris.pt'
+
+    run(episodes, model)

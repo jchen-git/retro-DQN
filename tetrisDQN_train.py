@@ -267,7 +267,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 matplotlib.use('Agg')
 
-def run(render_game):
+def run(render_game, ai_model):
     # Tetris game
     env = gym_tetris.make("TetrisA-v3")
     env = JoypadSpace(env, SIMPLE_MOVEMENT)
@@ -298,7 +298,9 @@ def run(render_game):
         with open(agent.DATA_FILE, 'w') as file:
             file.write(str(best_reward))
 
-    if os.path.isfile(agent.MODEL_FILE):
+    if ai_model != '':
+        agent.policy_net.load_state_dict(torch.load(ai_model, weights_only=True, map_location=device))
+    elif os.path.isfile(agent.MODEL_FILE):
         agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
 
     for episode in range(agent.epoch):
@@ -352,8 +354,8 @@ def run(render_game):
 
                 can_move = False
 
-            # 0x0048 refers to the current Tetris game phase. > 7 is after the score counter update and line clear animations
-            if obs[0x0048] > 7 and not can_move:
+            # 0x0048 refers to the current Tetris game phase. > 5 is during the score counter update
+            if obs[0x0048] > 5 and not can_move:
                 rew -= state[3] * 0.035
 
                 actions = torch.tensor(actions, device=device, dtype=torch.int64)
@@ -414,4 +416,9 @@ if __name__ == '__main__':
     else:
         render = False
 
-    run(render_game=render)
+    if '--best-model' in args:
+        model = 'models/best.pt'
+    else:
+        model = 'models/tetris.pt'
+
+    run(render_game=render, ai_model=model)
