@@ -245,7 +245,7 @@ def get_high_low(curr_board):
     return max_h - min_h
 ##
 
-def create_graph(dir, name, variable, x_label, y_label):
+def create_graph(directory, name, variable, x_label, y_label):
     # Save plots
     fig = plt.figure(1)
     durations_t = torch.tensor(variable, dtype=torch.float)
@@ -259,7 +259,7 @@ def create_graph(dir, name, variable, x_label, y_label):
         plt.plot(means.numpy())
 
     # Save plots
-    fig.savefig(os.path.join(dir, f'_{name}.png'))
+    fig.savefig(os.path.join(directory, f'_{name}.png'))
     plt.close(fig)
 
 # Set path for custom ROMs
@@ -298,7 +298,7 @@ def run(render_game, ai_model):
         with open(agent.DATA_FILE, 'w') as file:
             file.write(str(best_reward))
 
-    if ai_model != '':
+    if os.path.isfile(ai_model):
         agent.policy_net.load_state_dict(torch.load(ai_model, weights_only=True, map_location=device))
     elif os.path.isfile(agent.MODEL_FILE):
         agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
