@@ -33,6 +33,12 @@ class Agent:
         self.GAMMA = hyperparam['GAMMA']                           # Discount factor gamma for DQN algorithm
         self.epoch = hyperparam['epoch']                           # Amount of games to train for
         self.TAU = hyperparam['TAU']                               # TAU value for soft updating the networks
+        self.bumpiness_weight = hyperparam['bumpiness_weight']
+        self.agg_height_weight = hyperparam['agg_height_weight']
+        self.hole_weight = hyperparam['hole_weight']
+        self.line_clear_weight = hyperparam['line_clear_weight']
+        self.model_dir = hyperparam['model_dir']
+        self.log_dir = hyperparam['log_dir']
 
         if is_training:
             self.epsilon = hyperparam['epsilon_init']                  # 1 - 100% random actions
@@ -52,10 +58,10 @@ class Agent:
         self.loss_fn = torch.nn.MSELoss()
         self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
 
-        self.LOG_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.log')
-        self.DATA_FILE = os.path.join(LOG_DIR, f'{self.hyperparameter_set}.dat')
-        self.MODEL_FILE = os.path.join(MODEL_DIR, f'{self.hyperparameter_set}.pt')
-        self.GRAPH_FILE = LOG_DIR
+        self.LOG_FILE = os.path.join(self.log_dir, f'{self.hyperparameter_set}.log')
+        self.DATA_FILE = os.path.join(self.log_dir, f'{self.hyperparameter_set}.dat')
+        self.MODEL_FILE = os.path.join(self.model_dir, f'{self.hyperparameter_set}.pt')
+        self.GRAPH_FILE = self.log_dir
 
     # Calculate the Q targets for the current states and run the selected optimizer
     # Input:  None

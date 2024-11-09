@@ -267,7 +267,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 matplotlib.use('Agg')
 
-def run(render_game, ai_model):
+def run(render_game, ai_model, gui_episodes, gui_training_log):
     # Tetris game
     env = gym_tetris.make("TetrisA-v3")
     env = JoypadSpace(env, SIMPLE_MOVEMENT)
@@ -304,6 +304,7 @@ def run(render_game, ai_model):
         agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
 
     for episode in range(agent.epoch):
+        episode = 150
         env.reset()
         obs = env.ram
         board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
@@ -322,6 +323,7 @@ def run(render_game, ai_model):
 
         while not done:
             ___, rew, done, info = env.step(5)
+
             if render_game:
                 env.render()
             obs = env.ram
@@ -356,7 +358,10 @@ def run(render_game, ai_model):
 
             # 0x0048 refers to the current Tetris game phase. > 5 is during the score counter update
             if obs[0x0048] > 5 and not can_move:
-                rew -= state[3] * 0.035
+                rew += state[0] * agent.line_clear_weight
+                rew += state[1] * agent.bumpiness_weight
+                rew += state[2] * agent.agg_height_weight
+                rew += state[3] * agent.hole_weight
 
                 actions = torch.tensor(actions, device=device, dtype=torch.int64)
                 state = torch.tensor([state], device=device, dtype=torch.float)
@@ -373,6 +378,8 @@ def run(render_game, ai_model):
                     agent.optimize()
                 timestep = 0
 
+        gui_episodes.value = episode
+
         # Logging variables to save to an image
         avg_bump_per_episode.append(sum(ep_bump) / len(ep_bump))
         avg_holes_per_episode.append(sum(ep_holes) / len(ep_holes))
@@ -383,6 +390,7 @@ def run(render_game, ai_model):
 
         if ep_reward > best_reward:
             log_message= f"{datetime.now()}: New best reward: {ep_reward:0.2f} at episode {episode}"
+            gui_training_log.send(log_message)
             print(log_message)
             with open(agent.LOG_FILE, 'a') as file:
                 file.write(log_message + '\n')
@@ -395,6 +403,7 @@ def run(render_game, ai_model):
 
         if episode % 50 == 0:
             log_message = f"{datetime.now()}: Episode {episode} complete"
+            gui_training_log.send(log_message)
             print(log_message)
             create_graph(agent.GRAPH_FILE, 'rewards', rewards_per_episode, 'episode', 'reward')
             create_graph(agent.GRAPH_FILE, 'bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
