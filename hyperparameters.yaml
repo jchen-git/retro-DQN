@@ -12,8 +12,12 @@ tetris:
   hole_weight: -0.35
   learning_rate: 0.00025
   line_clear_weight: 0.0
-  log_dir: /home/csufstudent/PycharmProjects/retro-DQN/logs
+  log_dir: 
   mini_batch_size: 64
-  model_dir: /home/csufstudent/PycharmProjects/retro-DQN/models
+  model_dir:
+  line_clear_weight: 0.75
+  log_dir: 
+  mini_batch_size: 64
+  model_dir:
   replay_memory_size: 30000
   update_rate: 100
