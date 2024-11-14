@@ -1,5 +1,3 @@
-from ctypes import c_wchar_p
-from multiprocessing.sharedctypes import Array
 from os import walk
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (QApplication, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
@@ -13,8 +11,17 @@ import yaml
 
 # TODO
 # - More of what is shown in mockup
+#   - Done
 # - Connect buttons to scripts
+#   - Done
 # - Ability to save settings
+#   - Done
+# - Make training end properly instead of hanging on 99% and stop button still showing after completion
+#   - Fixed by creating a new pipe and using it to send a done signal
+# - Add more hyperparameters to the settings menu
+# - Add feature to disable rendering
+# - Add feature to create models with a specific name
+# - Remember to remove private data from hyperparameters.yaml
 
 class RetroDQNInterface(QDialog):
     def __init__(self, parent=None):
@@ -42,6 +49,7 @@ class RetroDQNInterface(QDialog):
             all_hyperparam_sets = yaml.safe_load(file)
             hyperparam = all_hyperparam_sets["tetris"]
 
+        # Main menu
         self.menu_tab_widget = QTabWidget()
         self.menu_tab_widget.setSizePolicy(QSizePolicy.Policy.Preferred,
                 QSizePolicy.Policy.Ignored)
@@ -56,7 +64,7 @@ class RetroDQNInterface(QDialog):
         training_tab.setFixedHeight(580)
         training_tab.setFixedWidth(560)
         self.output_box.setFixedHeight(250)
-        self.output_box.setFixedWidth(410)
+        self.output_box.setFixedWidth(390)
         self.output_box.setText("Ready")
 
         # Progress Bar
@@ -84,11 +92,11 @@ class RetroDQNInterface(QDialog):
         styleComboBox.textActivated.connect(self.changeStyle)
 
         self.checkpoints = self.getCheckpoints()
-        checkpointsComboBox = QComboBox()
-        checkpointsComboBox.addItems(self.checkpoints.keys())
+        self.checkpointsComboBox = QComboBox()
+        self.checkpointsComboBox.addItems(self.checkpoints.keys())
 
         checkpointsLabel = QLabel("Checkpoint:")
-        checkpointsLabel.setBuddy(checkpointsComboBox)
+        checkpointsLabel.setBuddy(self.checkpointsComboBox)
 
         episode_slider_label = QLabel("Episodes:")
         self.episode_slider_input = QSpinBox()
@@ -103,13 +111,15 @@ class RetroDQNInterface(QDialog):
         quick_setting_layout.addWidget(styleLabel, 0, 0)
         quick_setting_layout.addWidget(styleComboBox, 0, 1)
         quick_setting_layout.addWidget(checkpointsLabel, 1, 0)
-        quick_setting_layout.addWidget(checkpointsComboBox, 1, 1)
+        quick_setting_layout.addWidget(self.checkpointsComboBox, 1, 1)
         quick_setting_layout.addWidget(episode_slider_label, 2, 0)
         quick_setting_layout.addWidget(self.episode_slider_input, 2, 1)
         quick_setting_layout.addWidget(episode_slider, 3, 0, 1, 2)
         quick_setting_layout.setColumnStretch(1, 1)
         quick_setting_tab.setLayout(quick_setting_layout)
 
+        # Top half of the GUI
+        # Contains output box, run training, and run model buttons
         output_layout = QVBoxLayout()
         output_layout.addWidget(self.output_box)
         output_layout.addStretch(1)
@@ -121,6 +131,7 @@ class RetroDQNInterface(QDialog):
         button_layout.addStretch(1)
         buttons_group_box.setLayout(button_layout)
 
+        # Add the widgets to the main menu grid
         training_tab_grid = QGridLayout()
         training_tab_grid.addLayout(training_layout, 0, 0, 1, 2)
         training_tab_grid.addWidget(output_group_box, 1, 0)
@@ -148,7 +159,7 @@ class RetroDQNInterface(QDialog):
         hole_weight_label = QLabel("Holes")
         self.hole_weight_slider = QSlider(Qt.Orientation.Horizontal)
         self.hole_weight_input = QDoubleSpinBox()
-        self.hole_weight_slider.setRange(-1000, 1000)
+        self.hole_weight_slider.setRange(-10000, 10000)
         self.hole_weight_input.setRange(-1.0, 1.0)
         self.hole_weight_input.setSingleStep(0.0001)
         self.hole_weight_input.setDecimals(4)
@@ -159,7 +170,7 @@ class RetroDQNInterface(QDialog):
         agg_height_label = QLabel("Aggregate Height")
         self.agg_height_slider = QSlider(Qt.Orientation.Horizontal)
         self.agg_height_input = QDoubleSpinBox()
-        self.agg_height_slider.setRange(-1000, 1000)
+        self.agg_height_slider.setRange(-10000, 10000)
         self.agg_height_input.setRange(-1.0, 1.0)
         self.agg_height_input.setSingleStep(0.0001)
         self.agg_height_input.setDecimals(4)
@@ -170,7 +181,7 @@ class RetroDQNInterface(QDialog):
         bump_label = QLabel("Bumpiness")
         self.bump_slider = QSlider(Qt.Orientation.Horizontal)
         self.bump_input = QDoubleSpinBox()
-        self.bump_slider.setRange(-1000, 1000)
+        self.bump_slider.setRange(-10000, 10000)
         self.bump_input.setRange(-1.0, 1.0)
         self.bump_input.setSingleStep(0.0001)
         self.bump_input.setDecimals(4)
@@ -181,7 +192,7 @@ class RetroDQNInterface(QDialog):
         line_clear_label = QLabel("Line Clear")
         self.line_clear_slider = QSlider(Qt.Orientation.Horizontal)
         self.line_clear_input = QDoubleSpinBox()
-        self.line_clear_slider.setRange(-1000, 1000)
+        self.line_clear_slider.setRange(-10000, 10000)
         self.line_clear_input.setRange(-1.0, 1.0)
         self.line_clear_input.setSingleStep(0.0001)
         self.line_clear_input.setDecimals(4)
@@ -269,36 +280,42 @@ class RetroDQNInterface(QDialog):
         self.run_model_button.setText("Stop")
         self.run_model_button.clicked.disconnect()
         self.run_model_button.clicked.connect(self.kill_run_agent)
-        self.p = Process(target=tetrisDQN_play.run, args=(1, "aaa"))
+        self.p = Process(target=tetrisDQN_play.run, args=(5, self.checkpointsComboBox.currentText()))
         self.p.daemon = True
         self.p.start()
 
     def runTraining(self):
+        self.apply_settings()
+        self.training_prog_bar.setRange(0, int(self.episode_slider_input.value()))
         self.output_box.setText("Training in progress...")
         self.training_prog_bar.setValue(0)
         self.training_episodes = Value('i', 0)
         self.parent_conn, self.child_conn = Pipe()
+        self.parent_done_conn, self.child_done_conn = Pipe()
         self.start_training_button.setText("Stop")
         self.start_training_button.clicked.disconnect()
         self.start_training_button.clicked.connect(self.kill_training)
-        self.p2 = Process(target=tetrisDQN_train.run, args=(True, "aaa", self.training_episodes, self.child_conn))
+        self.p2 = Process(target=tetrisDQN_train.run, args=(True,
+                                                            self.checkpointsComboBox.currentText(),
+                                                            self.training_episodes,
+                                                            self.child_done_conn,
+                                                            self.child_conn))
         self.p2.daemon = True
         self.p2.start()
         self.t1 = QTimer()
         self.t1.timeout.connect(self.training_listen)
-        self.t1.start(5000)
+        self.t1.start(100)
         self.t2 = QTimer()
         self.t2.timeout.connect(self.training_log_listen)
         self.t2.start(1000)
 
     def training_listen(self):
         self.training_prog_bar.setValue(int(self.training_episodes.value))
-        if self.training_prog_bar.isMaximized():
-            self.t1.stop()
-            self.t2.stop()
-            self.p2.terminate()
-            self.p2.join(timeout=1)
-            self.output_box.setText("Training completed")
+        if self.parent_done_conn.poll():
+            if self.parent_done_conn.recv():
+                self.t1.stop()
+                self.t2.stop()
+                self.kill_training()
 
     def training_log_listen(self):
         if self.parent_conn.poll():
@@ -319,6 +336,7 @@ class RetroDQNInterface(QDialog):
         self.run_model_button.clicked.connect(self.runAgent)
         self.p.terminate()
         self.p.join(timeout=1)
+        self.output_box.setText("Ready")
 
     def kill_training(self):
         self.start_training_button.setText("Start Training")

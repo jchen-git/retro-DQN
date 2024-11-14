@@ -267,7 +267,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 matplotlib.use('Agg')
 
-def run(render_game, ai_model, gui_episodes, gui_training_log):
+def run(render_game, ai_model, gui_episodes, gui_child_done_conn, gui_child_conn):
     # Tetris game
     env = gym_tetris.make("TetrisA-v3")
     env = JoypadSpace(env, SIMPLE_MOVEMENT)
@@ -304,7 +304,6 @@ def run(render_game, ai_model, gui_episodes, gui_training_log):
         agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
 
     for episode in range(agent.epoch):
-        episode = 150
         env.reset()
         obs = env.ram
         board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
@@ -390,7 +389,7 @@ def run(render_game, ai_model, gui_episodes, gui_training_log):
 
         if ep_reward > best_reward:
             log_message= f"{datetime.now()}: New best reward: {ep_reward:0.2f} at episode {episode}"
-            gui_training_log.send(log_message)
+            gui_child_conn.send(log_message)
             print(log_message)
             with open(agent.LOG_FILE, 'a') as file:
                 file.write(log_message + '\n')
@@ -403,7 +402,7 @@ def run(render_game, ai_model, gui_episodes, gui_training_log):
 
         if episode % 50 == 0:
             log_message = f"{datetime.now()}: Episode {episode} complete"
-            gui_training_log.send(log_message)
+            gui_child_conn.send(log_message)
             print(log_message)
             create_graph(agent.GRAPH_FILE, 'rewards', rewards_per_episode, 'episode', 'reward')
             create_graph(agent.GRAPH_FILE, 'bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
@@ -412,6 +411,8 @@ def run(render_game, ai_model, gui_episodes, gui_training_log):
             create_graph(agent.GRAPH_FILE, 'score', score_per_episode, 'episode', 'score')
 
     env.close()
+
+    gui_child_done_conn.send(True)
 
     log_message=f"{datetime.now()}: Training Complete"
     print(log_message)
