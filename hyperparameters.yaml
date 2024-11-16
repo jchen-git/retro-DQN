@@ -1,23 +1,19 @@
 tetris:
   GAMMA: 0.95
   TAU: 0.0001
-  agg_height_weight: 0.0
-  bumpiness_weight: 0.0
+  agg_height_weight: -0.2235
+  bumpiness_weight: -0.2587
   env_id: Tetris-Nes
-  epoch: 3
-  epsilon_decay: 0.9995
+  epoch: 10
+  epsilon_decay: 0.0
   epsilon_init: 1
   epsilon_min: 0.01
   hidden_layers: 256
   hole_weight: -0.35
   learning_rate: 0.00025
-  line_clear_weight: 0.0
-  log_dir: 
-  mini_batch_size: 64
-  model_dir:
   line_clear_weight: 0.75
-  log_dir: 
+  log_dir: C:/Users/Jeffrey Chen/Desktop/CSUF/Capstone Project/retro-DQN/logs
   mini_batch_size: 64
-  model_dir:
+  model_dir: C:/Users/Jeffrey Chen/Desktop/CSUF/Capstone Project/retro-DQN/models
   replay_memory_size: 30000
   update_rate: 100

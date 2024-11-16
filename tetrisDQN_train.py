@@ -300,8 +300,6 @@ def run(render_game, ai_model, gui_episodes, gui_child_done_conn, gui_child_conn
 
     if os.path.isfile(ai_model):
         agent.policy_net.load_state_dict(torch.load(ai_model, weights_only=True, map_location=device))
-    elif os.path.isfile(agent.MODEL_FILE):
-        agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
 
     for episode in range(agent.epoch):
         env.reset()

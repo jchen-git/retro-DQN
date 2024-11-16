@@ -258,8 +258,6 @@ def run(episode_total, ai_model):
 
     if os.path.isfile(ai_model):
         agent.policy_net.load_state_dict(torch.load(ai_model, weights_only=True, map_location=device))
-    elif os.path.isfile(agent.MODEL_FILE):
-        agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
 
     for episode in range(episode_total):
         env.reset()

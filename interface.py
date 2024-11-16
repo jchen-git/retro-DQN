@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (QApplication, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
                              QProgressBar, QPushButton, QSizePolicy, QSlider, QSpinBox, QStyleFactory, QTabWidget,
                              QTextEdit,
-                             QVBoxLayout, QWidget, QDoubleSpinBox, QFileDialog, QMessageBox)
+                             QVBoxLayout, QWidget, QDoubleSpinBox, QFileDialog, QMessageBox, QCheckBox)
 from multiprocessing import Process, Value, Pipe
 import tetrisDQN_play
 import tetrisDQN_train
@@ -21,6 +21,7 @@ import yaml
 # - Add more hyperparameters to the settings menu
 # - Add feature to disable rendering
 # - Add feature to create models with a specific name
+# - Add feature to delete model
 # - Remember to remove private data from hyperparameters.yaml
 
 class RetroDQNInterface(QDialog):
@@ -77,6 +78,7 @@ class RetroDQNInterface(QDialog):
         self.start_training_button.clicked.connect(self.runTraining)
         self.run_model_button = QPushButton("Run Model")
         self.run_model_button.clicked.connect(self.runAgent)
+        self.render_checkbox = QCheckBox("Render Training")
 
         # Quick Settings tab on the Training menu tab
         quick_setting_widget = QTabWidget()
@@ -128,6 +130,7 @@ class RetroDQNInterface(QDialog):
         button_layout = QVBoxLayout()
         button_layout.addWidget(self.start_training_button)
         button_layout.addWidget(self.run_model_button)
+        button_layout.addWidget(self.render_checkbox)
         button_layout.addStretch(1)
         buttons_group_box.setLayout(button_layout)
 
@@ -280,12 +283,13 @@ class RetroDQNInterface(QDialog):
         self.run_model_button.setText("Stop")
         self.run_model_button.clicked.disconnect()
         self.run_model_button.clicked.connect(self.kill_run_agent)
-        self.p = Process(target=tetrisDQN_play.run, args=(5, self.checkpointsComboBox.currentText()))
+        self.p = Process(target=tetrisDQN_play.run, args=(self.episode_slider_input.value(),
+                                                          self.checkpointsComboBox.currentText()))
         self.p.daemon = True
         self.p.start()
 
     def runTraining(self):
-        self.apply_settings()
+        self.quick_apply_settings()
         self.training_prog_bar.setRange(0, int(self.episode_slider_input.value()))
         self.output_box.setText("Training in progress...")
         self.training_prog_bar.setValue(0)
@@ -295,7 +299,7 @@ class RetroDQNInterface(QDialog):
         self.start_training_button.setText("Stop")
         self.start_training_button.clicked.disconnect()
         self.start_training_button.clicked.connect(self.kill_training)
-        self.p2 = Process(target=tetrisDQN_train.run, args=(True,
+        self.p2 = Process(target=tetrisDQN_train.run, args=(self.render_checkbox.isChecked(),
                                                             self.checkpointsComboBox.currentText(),
                                                             self.training_episodes,
                                                             self.child_done_conn,
@@ -307,10 +311,10 @@ class RetroDQNInterface(QDialog):
         self.t1.start(100)
         self.t2 = QTimer()
         self.t2.timeout.connect(self.training_log_listen)
-        self.t2.start(1000)
+        self.t2.start(500)
 
     def training_listen(self):
-        self.training_prog_bar.setValue(int(self.training_episodes.value))
+        self.training_prog_bar.setValue(int(self.training_episodes.value) + 1)
         if self.parent_done_conn.poll():
             if self.parent_done_conn.recv():
                 self.t1.stop()
@@ -345,7 +349,25 @@ class RetroDQNInterface(QDialog):
         self.p2.terminate()
         self.p2.join(timeout=1)
         self.output_box.setText("Ready")
+        self.t1.stop()
+        self.t2.stop()
         self.training_prog_bar.setValue(0)
+
+    def quick_apply_settings(self):
+        with open('hyperparameters.yaml', 'r') as file:
+            all_hyperparam_sets = yaml.safe_load(file)
+
+        all_hyperparam_sets['tetris']['epsilon_decay'] = self.epsilon_decay_input.value()
+        all_hyperparam_sets['tetris']['epoch'] = self.episode_slider_input.value()
+        all_hyperparam_sets['tetris']['bumpiness_weight'] = self.bump_input.value()
+        all_hyperparam_sets['tetris']['agg_height_weight'] = self.agg_height_input.value()
+        all_hyperparam_sets['tetris']['hole_weight'] = self.hole_weight_input.value()
+        all_hyperparam_sets['tetris']['line_clear_weight'] = self.line_clear_input.value()
+        all_hyperparam_sets['tetris']['model_dir'] = self.model_dir_text_box.text()
+        all_hyperparam_sets['tetris']['log_dir'] = self.log_dir_text_box.text()
+
+        with open('hyperparameters.yaml', 'w') as file:
+            yaml.dump(all_hyperparam_sets, file, default_flow_style=False)
 
     def apply_settings(self):
         with open('hyperparameters.yaml', 'r') as file:
