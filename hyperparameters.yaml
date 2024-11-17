@@ -5,15 +5,15 @@ tetris:
   bumpiness_weight: -0.2587
   env_id: Tetris-Nes
   epoch: 10
-  epsilon_decay: 0.0
+  epsilon_decay: 0.9995
   epsilon_init: 1
   epsilon_min: 0.01
   hidden_layers: 256
   hole_weight: -0.35
   learning_rate: 0.00025
   line_clear_weight: 0.75
-  log_dir: C:/Users/Jeffrey Chen/Desktop/CSUF/Capstone Project/retro-DQN/logs
+  log_dir:
   mini_batch_size: 64
-  model_dir: C:/Users/Jeffrey Chen/Desktop/CSUF/Capstone Project/retro-DQN/models
+  model_dir:
   replay_memory_size: 30000
   update_rate: 100

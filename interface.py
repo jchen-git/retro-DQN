@@ -2,8 +2,7 @@ from os import walk
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (QApplication, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
                              QProgressBar, QPushButton, QSizePolicy, QSlider, QSpinBox, QStyleFactory, QTabWidget,
-                             QTextEdit,
-                             QVBoxLayout, QWidget, QDoubleSpinBox, QFileDialog, QMessageBox, QCheckBox)
+                             QTextEdit, QVBoxLayout, QWidget, QDoubleSpinBox, QFileDialog, QMessageBox, QCheckBox)
 from multiprocessing import Process, Value, Pipe
 import tetrisDQN_play
 import tetrisDQN_train
@@ -23,6 +22,8 @@ import yaml
 # - Add feature to create models with a specific name
 # - Add feature to delete model
 # - Remember to remove private data from hyperparameters.yaml
+# - Test training using new empty .pt file
+# - Test CUDA out of memory error
 
 class RetroDQNInterface(QDialog):
     def __init__(self, parent=None):
@@ -62,10 +63,6 @@ class RetroDQNInterface(QDialog):
         training_layout = QHBoxLayout()
         training_tab = QWidget()
         self.output_box = QTextEdit()
-        training_tab.setFixedHeight(580)
-        training_tab.setFixedWidth(560)
-        self.output_box.setFixedHeight(250)
-        self.output_box.setFixedWidth(390)
         self.output_box.setText("Ready")
 
         # Progress Bar
@@ -74,10 +71,12 @@ class RetroDQNInterface(QDialog):
         self.training_prog_bar.setRange(0, 300)
         self.training_prog_bar.setValue(0)
 
+        self.new_model_button = QPushButton("Create New Model")
+        self.new_model_button.clicked.connect(self.new_model)
         self.start_training_button = QPushButton("Start Training")
-        self.start_training_button.clicked.connect(self.runTraining)
+        self.start_training_button.clicked.connect(self.run_training)
         self.run_model_button = QPushButton("Run Model")
-        self.run_model_button.clicked.connect(self.runAgent)
+        self.run_model_button.clicked.connect(self.run_agent)
         self.render_checkbox = QCheckBox("Render Training")
 
         # Quick Settings tab on the Training menu tab
@@ -93,12 +92,12 @@ class RetroDQNInterface(QDialog):
 
         styleComboBox.textActivated.connect(self.changeStyle)
 
-        self.checkpoints = self.getCheckpoints()
-        self.checkpointsComboBox = QComboBox()
-        self.checkpointsComboBox.addItems(self.checkpoints.keys())
+        self.models = self.get_models()
+        self.models_combo_box = QComboBox()
+        self.models_combo_box.addItems(self.models.keys())
 
-        checkpointsLabel = QLabel("Checkpoint:")
-        checkpointsLabel.setBuddy(self.checkpointsComboBox)
+        modelsLabel = QLabel("Checkpoint:")
+        modelsLabel.setBuddy(self.models_combo_box)
 
         episode_slider_label = QLabel("Episodes:")
         self.episode_slider_input = QSpinBox()
@@ -110,13 +109,11 @@ class RetroDQNInterface(QDialog):
         self.episode_slider_input.setValue(int(hyperparam["epoch"]))
 
         quick_setting_layout = QGridLayout()
-        quick_setting_layout.addWidget(styleLabel, 0, 0)
-        quick_setting_layout.addWidget(styleComboBox, 0, 1)
-        quick_setting_layout.addWidget(checkpointsLabel, 1, 0)
-        quick_setting_layout.addWidget(self.checkpointsComboBox, 1, 1)
-        quick_setting_layout.addWidget(episode_slider_label, 2, 0)
-        quick_setting_layout.addWidget(self.episode_slider_input, 2, 1)
-        quick_setting_layout.addWidget(episode_slider, 3, 0, 1, 2)
+        quick_setting_layout.addWidget(modelsLabel, 0, 0)
+        quick_setting_layout.addWidget(self.models_combo_box, 0, 1)
+        quick_setting_layout.addWidget(episode_slider_label, 1, 0)
+        quick_setting_layout.addWidget(self.episode_slider_input, 1, 1)
+        quick_setting_layout.addWidget(episode_slider, 2, 0, 1, 2)
         quick_setting_layout.setColumnStretch(1, 1)
         quick_setting_tab.setLayout(quick_setting_layout)
 
@@ -128,6 +125,7 @@ class RetroDQNInterface(QDialog):
         output_group_box.setLayout(output_layout)
 
         button_layout = QVBoxLayout()
+        button_layout.addWidget(self.new_model_button)
         button_layout.addWidget(self.start_training_button)
         button_layout.addWidget(self.run_model_button)
         button_layout.addWidget(self.render_checkbox)
@@ -203,7 +201,20 @@ class RetroDQNInterface(QDialog):
         self.line_clear_slider.valueChanged['int'].connect(self.convert_line_clear_slider)
         self.line_clear_input.setValue(float(hyperparam['line_clear_weight']))
 
-        # Epsilon Decay Hyperparameter Slider and Double Spin Box
+        # Initial epsilon value hyperparameter Slider and Double Spin Box
+        epsilon_init_label = QLabel("Initial Epsilon")
+        self.epsilon_init_slider = QSlider(Qt.Orientation.Horizontal)
+        self.epsilon_init_input = QDoubleSpinBox()
+        self.epsilon_init_slider.setRange(0, 10000)
+        self.epsilon_init_input.setRange(0.0, 1.0)
+        self.epsilon_init_input.setSingleStep(0.0001)
+        self.epsilon_init_input.setDecimals(4)
+        self.epsilon_init_input.setKeyboardTracking(False)
+        self.epsilon_init_input.valueChanged['double'].connect(self.convert_epsilon_init_dspin)
+        self.epsilon_init_slider.valueChanged['int'].connect(self.convert_epsilon_init_slider)
+        self.epsilon_init_input.setValue(float(hyperparam['epsilon_init']))
+
+        # Epsilon decay hyperparameter Slider and Double Spin Box
         epsilon_decay_label = QLabel("Epsilon Decay")
         self.epsilon_decay_slider = QSlider(Qt.Orientation.Horizontal)
         self.epsilon_decay_input = QDoubleSpinBox()
@@ -215,6 +226,56 @@ class RetroDQNInterface(QDialog):
         self.epsilon_decay_input.valueChanged['double'].connect(self.convert_epsilon_decay_dspin)
         self.epsilon_decay_slider.valueChanged['int'].connect(self.convert_epsilon_decay_slider)
         self.epsilon_decay_input.setValue(float(hyperparam['epsilon_decay']))
+
+        # Epsilon minimum hyperparameter Slider and Double Spin Box
+        epsilon_min_label = QLabel("Epsilon Minimum")
+        self.epsilon_min_slider = QSlider(Qt.Orientation.Horizontal)
+        self.epsilon_min_input = QDoubleSpinBox()
+        self.epsilon_min_slider.setRange(0, 10000)
+        self.epsilon_min_input.setRange(0.0, 1.0)
+        self.epsilon_min_input.setSingleStep(0.0001)
+        self.epsilon_min_input.setDecimals(4)
+        self.epsilon_min_input.setKeyboardTracking(False)
+        self.epsilon_min_input.valueChanged['double'].connect(self.convert_epsilon_min_dspin)
+        self.epsilon_min_slider.valueChanged['int'].connect(self.convert_epsilon_min_slider)
+        self.epsilon_min_input.setValue(float(hyperparam['epsilon_min']))
+
+        # Replay memory size hyperparameter Slider and Double Spin Box
+        replay_size_label = QLabel("Replay Memory Size")
+        self.replay_size_slider = QSlider(Qt.Orientation.Horizontal)
+        self.replay_size_input = QSpinBox()
+        self.replay_size_slider.setRange(0, 100000)
+        self.replay_size_input.setRange(0, 100000)
+        self.replay_size_input.setSingleStep(1)
+        self.replay_size_input.setKeyboardTracking(False)
+        self.replay_size_input.valueChanged.connect(self.replay_size_slider.setValue)
+        self.replay_size_slider.valueChanged.connect(self.replay_size_input.setValue)
+        self.replay_size_input.setValue(int(hyperparam['replay_memory_size']))
+
+        # Mini-batch size hyperparameter Slider and Double Spin Box
+        mini_batch_size_label = QLabel("Mini-batch Size")
+        self.mini_batch_size_slider = QSlider(Qt.Orientation.Horizontal)
+        self.mini_batch_size_input = QSpinBox()
+        self.mini_batch_size_slider.setRange(0, 256)
+        self.mini_batch_size_input.setRange(0, 256)
+        self.mini_batch_size_input.setSingleStep(1)
+        self.mini_batch_size_input.setKeyboardTracking(False)
+        self.mini_batch_size_input.valueChanged.connect(self.mini_batch_size_slider.setValue)
+        self.mini_batch_size_slider.valueChanged.connect(self.mini_batch_size_input.setValue)
+        self.mini_batch_size_input.setValue(int(hyperparam['mini_batch_size']))
+
+        # Learning rate hyperparameter Slider and Double Spin Box
+        learning_rate_label = QLabel("Learning Rate")
+        self.learning_rate_slider = QSlider(Qt.Orientation.Horizontal)
+        self.learning_rate_input = QDoubleSpinBox()
+        self.learning_rate_slider.setRange(0, 10000)
+        self.learning_rate_input.setRange(0.0, 1.0)
+        self.learning_rate_input.setSingleStep(0.0001)
+        self.learning_rate_input.setDecimals(4)
+        self.learning_rate_input.setKeyboardTracking(False)
+        self.learning_rate_input.valueChanged['double'].connect(self.convert_learning_rate_dspin)
+        self.learning_rate_slider.valueChanged['int'].connect(self.convert_learning_rate_slider)
+        self.learning_rate_input.setValue(float(hyperparam['learning_rate']))
 
         hyperparam_group_box.setLayout(hyperparam_grid_layout)
 
@@ -237,9 +298,29 @@ class RetroDQNInterface(QDialog):
         hyperparam_grid_layout.addWidget(self.line_clear_slider, 4, 1, Qt.AlignmentFlag.AlignTop)
         hyperparam_grid_layout.addWidget(self.line_clear_input, 4, 2, Qt.AlignmentFlag.AlignTop)
 
-        hyperparam_grid_layout.addWidget(epsilon_decay_label, 5, 0, Qt.AlignmentFlag.AlignTop)
-        hyperparam_grid_layout.addWidget(self.epsilon_decay_slider, 5, 1, Qt.AlignmentFlag.AlignTop)
-        hyperparam_grid_layout.addWidget(self.epsilon_decay_input, 5, 2, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(epsilon_init_label, 5, 0, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.epsilon_init_slider, 5, 1, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.epsilon_init_input, 5, 2, Qt.AlignmentFlag.AlignTop)
+
+        hyperparam_grid_layout.addWidget(epsilon_decay_label, 6, 0, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.epsilon_decay_slider, 6, 1, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.epsilon_decay_input, 6, 2, Qt.AlignmentFlag.AlignTop)
+
+        hyperparam_grid_layout.addWidget(epsilon_min_label, 7, 0, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.epsilon_min_slider, 7, 1, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.epsilon_min_input, 7, 2, Qt.AlignmentFlag.AlignTop)
+
+        hyperparam_grid_layout.addWidget(replay_size_label, 8, 0, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.replay_size_slider, 8, 1, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.replay_size_input, 8, 2, Qt.AlignmentFlag.AlignTop)
+
+        hyperparam_grid_layout.addWidget(mini_batch_size_label, 9, 0, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.mini_batch_size_slider, 9, 1, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.mini_batch_size_input, 9, 2, Qt.AlignmentFlag.AlignTop)
+
+        hyperparam_grid_layout.addWidget(learning_rate_label, 10, 0, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.learning_rate_slider, 10, 1, Qt.AlignmentFlag.AlignTop)
+        hyperparam_grid_layout.addWidget(self.learning_rate_input, 10, 2, Qt.AlignmentFlag.AlignTop)
 
         model_dir_group_box = QGroupBox("")
         model_dir_label = QLabel("Models Directory")
@@ -278,17 +359,17 @@ class RetroDQNInterface(QDialog):
         self.menu_tab_widget.addTab(training_tab, "Training")
         self.menu_tab_widget.addTab(settings_tab, "Settings")
 
-    def runAgent(self):
+    def run_agent(self):
         self.output_box.setText("Using model to run agent...")
         self.run_model_button.setText("Stop")
         self.run_model_button.clicked.disconnect()
         self.run_model_button.clicked.connect(self.kill_run_agent)
         self.p = Process(target=tetrisDQN_play.run, args=(self.episode_slider_input.value(),
-                                                          self.checkpointsComboBox.currentText()))
+                                                          self.models_combo_box.currentText()))
         self.p.daemon = True
         self.p.start()
 
-    def runTraining(self):
+    def run_training(self):
         self.quick_apply_settings()
         self.training_prog_bar.setRange(0, int(self.episode_slider_input.value()))
         self.output_box.setText("Training in progress...")
@@ -300,7 +381,7 @@ class RetroDQNInterface(QDialog):
         self.start_training_button.clicked.disconnect()
         self.start_training_button.clicked.connect(self.kill_training)
         self.p2 = Process(target=tetrisDQN_train.run, args=(self.render_checkbox.isChecked(),
-                                                            self.checkpointsComboBox.currentText(),
+                                                            self.models_combo_box.currentText(),
                                                             self.training_episodes,
                                                             self.child_done_conn,
                                                             self.child_conn))
@@ -325,7 +406,17 @@ class RetroDQNInterface(QDialog):
         if self.parent_conn.poll():
             self.output_box.append(self.parent_conn.recv())
 
-    def getCheckpoints(self):
+    def new_model(self):
+        if self.model_dir_text_box.text() != '':
+            filename, _ = QFileDialog.getSaveFileName(self, "Create New Model", self.model_dir_text_box.text() + "/model.pt")
+        else:
+            filename, _ = QFileDialog.getSaveFileName(self, "Create New Model", "model.pt")
+        with open(filename, 'w') as file:
+            file.write("")
+        self.models_combo_box.addItem(filename.split('/')[-1])
+        self.models_combo_box.setCurrentText(filename.split('/')[-1])
+
+    def get_models(self):
         files_in_dir = next(walk("models"), (None, None, []))
         path = files_in_dir[0]
         ckpts = {}
@@ -357,7 +448,12 @@ class RetroDQNInterface(QDialog):
         with open('hyperparameters.yaml', 'r') as file:
             all_hyperparam_sets = yaml.safe_load(file)
 
+        all_hyperparam_sets['tetris']['epsilon_init'] = self.epsilon_init_input.value()
         all_hyperparam_sets['tetris']['epsilon_decay'] = self.epsilon_decay_input.value()
+        all_hyperparam_sets['tetris']['epsilon_min'] = self.epsilon_min_input.value()
+        all_hyperparam_sets['tetris']['replay_memory_size'] = self.replay_size_input.value()
+        all_hyperparam_sets['tetris']['mini_batch_size'] = self.mini_batch_size_input.value()
+        all_hyperparam_sets['tetris']['learning_rate'] = self.learning_rate_input.value()
         all_hyperparam_sets['tetris']['epoch'] = self.episode_slider_input.value()
         all_hyperparam_sets['tetris']['bumpiness_weight'] = self.bump_input.value()
         all_hyperparam_sets['tetris']['agg_height_weight'] = self.agg_height_input.value()
@@ -373,7 +469,12 @@ class RetroDQNInterface(QDialog):
         with open('hyperparameters.yaml', 'r') as file:
             all_hyperparam_sets = yaml.safe_load(file)
 
+        all_hyperparam_sets['tetris']['epsilon_init'] = self.epsilon_init_input.value()
         all_hyperparam_sets['tetris']['epsilon_decay'] = self.epsilon_decay_input.value()
+        all_hyperparam_sets['tetris']['epsilon_min'] = self.epsilon_min_input.value()
+        all_hyperparam_sets['tetris']['learning_rate'] = self.learning_rate_input.value()
+        all_hyperparam_sets['tetris']['replay_memory_size'] = self.replay_size_input.value()
+        all_hyperparam_sets['tetris']['mini_batch_size'] = self.mini_batch_size_input.value()
         all_hyperparam_sets['tetris']['epoch'] = self.episode_slider_input.value()
         all_hyperparam_sets['tetris']['bumpiness_weight'] = self.bump_input.value()
         all_hyperparam_sets['tetris']['agg_height_weight'] = self.agg_height_input.value()
@@ -390,6 +491,14 @@ class RetroDQNInterface(QDialog):
         msg.setText('Settings saved!')
         msg.exec()
 
+    def convert_epsilon_init_slider(self, val):
+        val = float(val/10000)
+        self.epsilon_init_input.setValue(val)
+
+    def convert_epsilon_init_dspin(self, val):
+        val = int(val*10000)
+        self.epsilon_init_slider.setValue(val)
+
     def convert_epsilon_decay_slider(self, val):
         val = float(val/10000)
         self.epsilon_decay_input.setValue(val)
@@ -397,6 +506,22 @@ class RetroDQNInterface(QDialog):
     def convert_epsilon_decay_dspin(self, val):
         val = int(val*10000)
         self.epsilon_decay_slider.setValue(val)
+
+    def convert_epsilon_min_slider(self, val):
+        val = float(val / 10000)
+        self.epsilon_min_input.setValue(val)
+
+    def convert_epsilon_min_dspin(self, val):
+        val = int(val * 10000)
+        self.epsilon_min_slider.setValue(val)
+
+    def convert_learning_rate_slider(self, val):
+        val = float(val / 10000)
+        self.learning_rate_input.setValue(val)
+
+    def convert_learning_rate_dspin(self, val):
+        val = int(val * 10000)
+        self.learning_rate_slider.setValue(val)
 
     def convert_hole_weight_slider(self, val):
         val = float(val/10000)
@@ -446,96 +571,6 @@ class RetroDQNInterface(QDialog):
 
     def changePalette(self):
         QApplication.setPalette(self.originalPalette)
-
-    # Delete templates below when done with project
-    # def advanceProgressBar(self):
-    #     curVal = self.progressBar.value()
-    #     maxVal = self.progressBar.maximum()
-    #     self.progressBar.setValue(curVal + (maxVal - curVal) // 100)
-    #
-    # def createTopLeftGroupBox(self):
-    #     self.topLeftGroupBox = QGroupBox("Group 1")
-    #
-    #     radioButton1 = QRadioButton("Radio button 1")
-    #     radioButton2 = QRadioButton("Radio button 2")
-    #     radioButton3 = QRadioButton("Radio button 3")
-    #     radioButton1.setChecked(True)
-    #
-    #     checkBox = QCheckBox("Tri-state check box")
-    #     checkBox.setTristate(True)
-    #     checkBox.setCheckState(Qt.CheckState.PartiallyChecked)
-    #
-    #     layout = QVBoxLayout()
-    #     layout.addWidget(radioButton1)
-    #     layout.addWidget(radioButton2)
-    #     layout.addWidget(radioButton3)
-    #     layout.addWidget(checkBox)
-    #     layout.addStretch(1)
-    #     self.topLeftGroupBox.setLayout(layout)
-    #
-    # def createTopRightGroupBox(self):
-    #     self.topRightGroupBox = QGroupBox("Group 2")
-    #
-    #     defaultPushButton = QPushButton("Change")
-    #     defaultPushButton.setDefault(True)
-    #
-    #     togglePushButton = QPushButton("Toggle Push Button")
-    #     togglePushButton.setCheckable(True)
-    #     togglePushButton.setChecked(True)
-    #
-    #     flatPushButton = QPushButton("Flat Push Button")
-    #     flatPushButton.setFlat(True)
-    #
-    #     layout = QVBoxLayout()
-    #     layout.addWidget(defaultPushButton)
-    #     layout.addWidget(togglePushButton)
-    #     layout.addWidget(flatPushButton)
-    #     layout.addStretch(1)
-    #     self.topRightGroupBox.setLayout(layout)
-    #
-    # def createBottomRightGroupBox(self):
-    #     self.bottomRightGroupBox = QGroupBox("Group 3")
-    #     self.bottomRightGroupBox.setCheckable(True)
-    #     self.bottomRightGroupBox.setChecked(True)
-    #
-    #     lineEdit = QLineEdit('s3cRe7')
-    #
-    #     spinBox = QDoubleSpinBox(self.bottomRightGroupBox)
-    #     spinBox.setMinimum(-100)
-    #     spinBox.setValue(-0.03)
-    #
-    #     dateTimeEdit = QDateTimeEdit(self.bottomRightGroupBox)
-    #     dateTimeEdit.setDateTime(QDateTime.currentDateTime())
-    #
-    #     slider = QSlider(Qt.Orientation.Horizontal, self.bottomRightGroupBox)
-    #     slider.setValue(40)
-    #
-    #     scrollBar = QScrollBar(Qt.Orientation.Horizontal, self.bottomRightGroupBox)
-    #     scrollBar.setValue(60)
-    #
-    #     dial = QDial(self.bottomRightGroupBox)
-    #     dial.setValue(30)
-    #     dial.setNotchesVisible(True)
-    #
-    #     layout = QGridLayout()
-    #     layout.addWidget(lineEdit, 0, 0, 1, 2)
-    #     layout.addWidget(spinBox, 1, 0, 1, 2)
-    #     layout.addWidget(dateTimeEdit, 2, 0, 1, 2)
-    #     layout.addWidget(slider, 3, 0)
-    #     layout.addWidget(scrollBar, 4, 0)
-    #     layout.addWidget(dial, 3, 1, 2, 1)
-    #     layout.setRowStretch(5, 1)
-    #     self.bottomRightGroupBox.setLayout(layout)
-    #
-    # def createProgressBar(self):
-    #     self.progressBar = QProgressBar()
-    #     self.progressBar.setRange(0, 10000)
-    #     self.progressBar.setValue(0)
-    #
-    #     timer = QTimer(self)
-    #     timer.timeout.connect(self.advanceProgressBar)
-    #     timer.start(1000)
-
 
 if __name__ == '__main__':
 
