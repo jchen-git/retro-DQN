@@ -1,9 +1,7 @@
 import os
 import gym_tetris
 import torch
-import sys
 import numpy as np
-from datetime import datetime
 from nes_py.wrappers import JoypadSpace
 from gym_tetris.actions import SIMPLE_MOVEMENT
 from agentDQN import Agent
@@ -243,74 +241,62 @@ def get_high_low(curr_board):
     return max_h - min_h
 ##
 
-def run(episode_total, ai_model):
+def run(ai_model, model_dir, child_done_conn, gui_log_conn):
     # Tetris game
     env = gym_tetris.make("TetrisA-v3")
     env = JoypadSpace(env, SIMPLE_MOVEMENT)
     INPUT_SHAPE = 5
     is_training = False
+    model_file = os.path.join(model_dir, f'{ai_model}')
     agent = Agent(INPUT_SHAPE,"tetris", is_training)
 
-    log_message=f"{datetime.now()}: Playing..."
-    print(log_message)
-    with open(agent.LOG_FILE, 'w') as file:
-        file.write(log_message + '\n')
+    if os.path.isfile(model_file):
+        try:
+            agent.policy_net.load_state_dict(torch.load(model_file, weights_only=True, map_location=device))
+        except EOFError:
+            child_done_conn.send('error')
+            gui_log_conn.send('Error: The selected model does not contain model data.')
+            return
 
-    if os.path.isfile(ai_model):
-        agent.policy_net.load_state_dict(torch.load(ai_model, weights_only=True, map_location=device))
+    env.reset()
+    obs = env.ram
+    board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
+    board[board == 239] = 0
+    board[board != 0] = 1
+    piece_id = obs[0x0042]
 
-    for episode in range(episode_total):
-        env.reset()
+    done = False
+    can_move = True
+
+    while not done:
+        ___, rew, done, info = env.step(5)
+        env.render()
         obs = env.ram
-        board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
-        board[board == 239] = 0
-        board[board != 0] = 1
-        piece_id = obs[0x0042]
 
-        done = False
-        can_move = True
-
-        while not done:
-            ___, rew, done, info = env.step(5)
-            env.render()
-            obs = env.ram
-
-            if obs[0x0041] == 0 and can_move:
-                board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
-                board[board == 239] = 0
-                board[board != 0] = 1
-                piece_id = obs[0x0042]
-                actions, state = agent.act(get_possible_states(piece_id, board))
-                for action in actions:
-                    if not done:
-                        ___, rew, done, info = env.step(action)
-                        env.render()
+        if obs[0x0041] == 0 and can_move:
+            board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
+            board[board == 239] = 0
+            board[board != 0] = 1
+            piece_id = obs[0x0042]
+            actions, state = agent.act(get_possible_states(piece_id, board))
+            for action in actions:
                 if not done:
-                    ___, rew, done, info = env.step(0)
+                    ___, rew, done, info = env.step(action)
                     env.render()
-                    obs = env.ram
-                can_move = False
+            if not done:
+                ___, rew, done, info = env.step(0)
+                env.render()
+                obs = env.ram
+            can_move = False
 
-            if obs[0x0048] > 7 and not can_move:
-                can_move = True
+        if obs[0x0048] > 7 and not can_move:
+            can_move = True
 
+    last_two_digits = (obs[0x0053] >> 4) * 10 + (obs[0x0053] & 0x0F)
+    mid_two_digits = (obs[0x0054] >> 4) * 1000 + (obs[0x0054] & 0x0F) * 100
+    first_two_digits = (obs[0x0055] >> 4) * 100000 + (obs[0x0055] & 0x0F) * 10000
+    score = first_two_digits + mid_two_digits + last_two_digits
+
+    gui_log_conn.send('Final Score: ' + str(score))
+    child_done_conn.send('done')
     env.close()
-
-    log_message=f"{datetime.now()}: Episodes Complete"
-    print(log_message)
-    with open(agent.LOG_FILE, 'a') as file:
-        file.write(log_message + '\n')
-
-if __name__ == '__main__':
-    args = sys.argv
-    if '--episodes' in args:
-        episodes = int(args[2])
-    else:
-        episodes = 1
-
-    if '--best-model' in args:
-        model = 'models/best.pt'
-    else:
-        model = 'models/tetris.pt'
-
-    run(episodes, model)

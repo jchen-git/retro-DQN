@@ -18,12 +18,19 @@ import yaml
 # - Make training end properly instead of hanging on 99% and stop button still showing after completion
 #   - Fixed by creating a new pipe and using it to send a done signal
 # - Add more hyperparameters to the settings menu
+#   - Done
 # - Add feature to disable rendering
+#   - Done
 # - Add feature to create models with a specific name
+#   - Done
 # - Add feature to delete model
 # - Remember to remove private data from hyperparameters.yaml
 # - Test training using new empty .pt file
+#   - Done
 # - Test CUDA out of memory error
+# - Change logging datetime
+# - Separate output box and app state text
+# - Implement setting to set hard stop to episode
 
 class RetroDQNInterface(QDialog):
     def __init__(self, parent=None):
@@ -360,14 +367,24 @@ class RetroDQNInterface(QDialog):
         self.menu_tab_widget.addTab(settings_tab, "Settings")
 
     def run_agent(self):
+        self.quick_apply_settings()
         self.output_box.setText("Using model to run agent...")
         self.run_model_button.setText("Stop")
         self.run_model_button.clicked.disconnect()
         self.run_model_button.clicked.connect(self.kill_run_agent)
-        self.p = Process(target=tetrisDQN_play.run, args=(self.episode_slider_input.value(),
-                                                          self.models_combo_box.currentText()))
+        self.run_parent_done_conn, self.run_child_done_conn = Pipe()
+        self.run_parent_conn, self.run_child_conn = Pipe()
+        self.start_training_button.setDisabled(True)
+        self.new_model_button.setDisabled(True)
+        self.p = Process(target=tetrisDQN_play.run, args=(self.models_combo_box.currentText(),
+                                                          self.model_dir_text_box.text(),
+                                                          self.run_child_done_conn,
+                                                          self.run_child_conn))
         self.p.daemon = True
         self.p.start()
+        self.run_t1 = QTimer()
+        self.run_t1.timeout.connect(self.run_model_listen)
+        self.run_t1.start(100)
 
     def run_training(self):
         self.quick_apply_settings()
@@ -380,8 +397,12 @@ class RetroDQNInterface(QDialog):
         self.start_training_button.setText("Stop")
         self.start_training_button.clicked.disconnect()
         self.start_training_button.clicked.connect(self.kill_training)
+        self.run_model_button.setDisabled(True)
+        self.new_model_button.setDisabled(True)
         self.p2 = Process(target=tetrisDQN_train.run, args=(self.render_checkbox.isChecked(),
                                                             self.models_combo_box.currentText(),
+                                                            self.model_dir_text_box.text(),
+                                                            self.log_dir_text_box.text(),
                                                             self.training_episodes,
                                                             self.child_done_conn,
                                                             self.child_conn))
@@ -394,8 +415,31 @@ class RetroDQNInterface(QDialog):
         self.t2.timeout.connect(self.training_log_listen)
         self.t2.start(500)
 
+    def run_model_listen(self):
+        if self.run_parent_done_conn.poll():
+            run_state = self.run_parent_done_conn.recv()
+            if run_state == 'done':
+                self.run_t1.stop()
+                self.kill_run_agent()
+
+                if self.run_parent_conn.poll():
+                    msg = QMessageBox()
+                    msg.setWindowTitle('Score')
+                    msg.setText(self.run_parent_conn.recv())
+                    msg.exec()
+
+            elif run_state == 'error':
+                self.run_t1.stop()
+                self.kill_run_agent()
+
+                if self.run_parent_conn.poll():
+                    msg = QMessageBox()
+                    msg.setWindowTitle('Error')
+                    msg.setText(self.run_parent_conn.recv())
+                    msg.exec()
+
     def training_listen(self):
-        self.training_prog_bar.setValue(int(self.training_episodes.value) + 1)
+        self.training_prog_bar.setValue(int(self.training_episodes.value))
         if self.parent_done_conn.poll():
             if self.parent_done_conn.recv():
                 self.t1.stop()
@@ -407,14 +451,20 @@ class RetroDQNInterface(QDialog):
             self.output_box.append(self.parent_conn.recv())
 
     def new_model(self):
+        self.run_model_button.setDisabled(True)
+        self.start_training_button.setDisabled(True)
         if self.model_dir_text_box.text() != '':
             filename, _ = QFileDialog.getSaveFileName(self, "Create New Model", self.model_dir_text_box.text() + "/model.pt")
         else:
             filename, _ = QFileDialog.getSaveFileName(self, "Create New Model", "model.pt")
-        with open(filename, 'w') as file:
-            file.write("")
-        self.models_combo_box.addItem(filename.split('/')[-1])
-        self.models_combo_box.setCurrentText(filename.split('/')[-1])
+
+        if filename != "":
+            with open(filename, 'w') as file:
+                file.write("")
+            self.models_combo_box.addItem(filename.split('/')[-1])
+            self.models_combo_box.setCurrentText(filename.split('/')[-1])
+        self.run_model_button.setDisabled(False)
+        self.start_training_button.setDisabled(False)
 
     def get_models(self):
         files_in_dir = next(walk("models"), (None, None, []))
@@ -428,21 +478,25 @@ class RetroDQNInterface(QDialog):
     def kill_run_agent(self):
         self.run_model_button.setText("Run Model")
         self.run_model_button.clicked.disconnect()
-        self.run_model_button.clicked.connect(self.runAgent)
+        self.run_model_button.clicked.connect(self.run_agent)
         self.p.terminate()
         self.p.join(timeout=1)
         self.output_box.setText("Ready")
+        self.start_training_button.setDisabled(False)
+        self.new_model_button.setDisabled(False)
 
     def kill_training(self):
         self.start_training_button.setText("Start Training")
         self.start_training_button.clicked.disconnect()
-        self.start_training_button.clicked.connect(self.runTraining)
+        self.start_training_button.clicked.connect(self.run_training)
         self.p2.terminate()
         self.p2.join(timeout=1)
         self.output_box.setText("Ready")
         self.t1.stop()
         self.t2.stop()
         self.training_prog_bar.setValue(0)
+        self.run_model_button.setDisabled(False)
+        self.new_model_button.setDisabled(False)
 
     def quick_apply_settings(self):
         with open('hyperparameters.yaml', 'r') as file:

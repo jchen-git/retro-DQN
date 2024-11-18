@@ -1,17 +1,17 @@
 tetris:
   GAMMA: 0.95
   TAU: 0.0001
-  agg_height_weight: -0.2235
-  bumpiness_weight: -0.2587
+  agg_height_weight: -0.2195
+  bumpiness_weight: -0.2866
   env_id: Tetris-Nes
-  epoch: 10
+  epoch: 1200
   epsilon_decay: 0.9995
-  epsilon_init: 1
+  epsilon_init: 0.0213
   epsilon_min: 0.01
   hidden_layers: 256
-  hole_weight: -0.35
-  learning_rate: 0.00025
-  line_clear_weight: 0.75
+  hole_weight: -0.378
+  learning_rate: 0.0002
+  line_clear_weight: 0.8354
   log_dir: 
   mini_batch_size: 64
   model_dir: 
