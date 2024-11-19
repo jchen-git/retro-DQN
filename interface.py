@@ -31,6 +31,7 @@ import yaml
 # - Change logging datetime
 # - Separate output box and app state text
 # - Implement setting to set hard stop to episode
+#   - Fix UI for this
 
 class RetroDQNInterface(QDialog):
     def __init__(self, parent=None):
@@ -113,7 +114,18 @@ class RetroDQNInterface(QDialog):
         episode_slider.setRange(0, 9999)
         self.episode_slider_input.valueChanged.connect(episode_slider.setValue)
         episode_slider.valueChanged.connect(self.episode_slider_input.setValue)
-        self.episode_slider_input.setValue(int(hyperparam["epoch"]))
+        self.episode_slider_input.setValue(int(hyperparam['episodes']))
+
+        self.episode_timer_toggle = QCheckBox("Use Episode Timer")
+        episode_timer_label = QLabel("Episode Timer:")
+        self.episode_timer_input = QSpinBox()
+        self.episode_timer_input.setRange(0, 600)
+        self.episode_timer_slider = QSlider(Qt.Orientation.Horizontal)
+        self.episode_timer_slider.setRange(0, 600)
+        self.episode_timer_input.valueChanged.connect(self.episode_timer_slider.setValue)
+        self.episode_timer_slider.valueChanged.connect(self.episode_timer_input.setValue)
+        self.episode_timer_toggle.clicked.connect(self.toggle_episode_timer)
+        self.episode_timer_input.setValue(60)
 
         quick_setting_layout = QGridLayout()
         quick_setting_layout.addWidget(modelsLabel, 0, 0)
@@ -121,6 +133,10 @@ class RetroDQNInterface(QDialog):
         quick_setting_layout.addWidget(episode_slider_label, 1, 0)
         quick_setting_layout.addWidget(self.episode_slider_input, 1, 1)
         quick_setting_layout.addWidget(episode_slider, 2, 0, 1, 2)
+        quick_setting_layout.addWidget(episode_timer_label, 3, 0)
+        quick_setting_layout.addWidget(self.episode_timer_toggle, 3, 1)
+        quick_setting_layout.addWidget(self.episode_timer_slider, 4, 0)
+        quick_setting_layout.addWidget(self.episode_timer_input, 4, 1)
         quick_setting_layout.setColumnStretch(1, 1)
         quick_setting_tab.setLayout(quick_setting_layout)
 
@@ -400,12 +416,14 @@ class RetroDQNInterface(QDialog):
         self.run_model_button.setDisabled(True)
         self.new_model_button.setDisabled(True)
         self.p2 = Process(target=tetrisDQN_train.run, args=(self.render_checkbox.isChecked(),
+                                                            self.episode_timer_toggle.isChecked(),
                                                             self.models_combo_box.currentText(),
                                                             self.model_dir_text_box.text(),
                                                             self.log_dir_text_box.text(),
                                                             self.training_episodes,
                                                             self.child_done_conn,
-                                                            self.child_conn))
+                                                            self.child_conn,
+                                                            self.episode_timer_input.value()))
         self.p2.daemon = True
         self.p2.start()
         self.t1 = QTimer()
@@ -508,7 +526,7 @@ class RetroDQNInterface(QDialog):
         all_hyperparam_sets['tetris']['replay_memory_size'] = self.replay_size_input.value()
         all_hyperparam_sets['tetris']['mini_batch_size'] = self.mini_batch_size_input.value()
         all_hyperparam_sets['tetris']['learning_rate'] = self.learning_rate_input.value()
-        all_hyperparam_sets['tetris']['epoch'] = self.episode_slider_input.value()
+        all_hyperparam_sets['tetris']['episodes'] = self.episode_slider_input.value()
         all_hyperparam_sets['tetris']['bumpiness_weight'] = self.bump_input.value()
         all_hyperparam_sets['tetris']['agg_height_weight'] = self.agg_height_input.value()
         all_hyperparam_sets['tetris']['hole_weight'] = self.hole_weight_input.value()
@@ -529,7 +547,7 @@ class RetroDQNInterface(QDialog):
         all_hyperparam_sets['tetris']['learning_rate'] = self.learning_rate_input.value()
         all_hyperparam_sets['tetris']['replay_memory_size'] = self.replay_size_input.value()
         all_hyperparam_sets['tetris']['mini_batch_size'] = self.mini_batch_size_input.value()
-        all_hyperparam_sets['tetris']['epoch'] = self.episode_slider_input.value()
+        all_hyperparam_sets['tetris']['episodes'] = self.episode_slider_input.value()
         all_hyperparam_sets['tetris']['bumpiness_weight'] = self.bump_input.value()
         all_hyperparam_sets['tetris']['agg_height_weight'] = self.agg_height_input.value()
         all_hyperparam_sets['tetris']['hole_weight'] = self.hole_weight_input.value()
@@ -618,6 +636,14 @@ class RetroDQNInterface(QDialog):
         file_dialog = QFileDialog()
         folder_path = file_dialog.getExistingDirectory(None, "Select Folder")
         self.log_dir_text_box.setText(folder_path)
+
+    def toggle_episode_timer(self):
+        if self.episode_timer_toggle.isChecked():
+            self.episode_timer_input.setDisabled(True)
+            self.episode_timer_slider.setDisabled(True)
+        else:
+            self.episode_timer_input.setDisabled(False)
+            self.episode_timer_slider.setDisabled(False)
 
     def changeStyle(self, styleName):
         QApplication.setStyle(QStyleFactory.create(styleName))

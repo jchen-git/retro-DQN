@@ -268,7 +268,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 matplotlib.use('Agg')
 
-def run(render_game, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_conn, gui_child_conn):
+def run(render_game, ep_time, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_conn, gui_child_conn, use_timer):
     # Tetris game
     env = gym_tetris.make("TetrisA-v3")
     env = JoypadSpace(env, SIMPLE_MOVEMENT)
@@ -290,7 +290,7 @@ def run(render_game, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_
     best_reward = -999.0
     timestep = 0
 
-    log_message=f"{datetime.now()}: Training..."
+    log_message=f"{datetime.now().strftime('%H:%M:%S')}: Training..."
     print(log_message)
     with open(log_file, 'w') as file:
         file.write(log_message + '\n')
@@ -306,8 +306,10 @@ def run(render_game, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_
         if os.path.getsize(model_file) != 0:
             agent.policy_net.load_state_dict(torch.load(model_file, weights_only=True, map_location=device))
 
-    for episode in range(agent.epoch):
-        hard_stop = time.time() + 60
+    for episode in range(agent.episodes):
+        if use_timer:
+            hard_stop = time.time() + ep_time
+        ep_start_time = time.time()
         env.reset()
         obs = env.ram
         board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
@@ -381,8 +383,9 @@ def run(render_game, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_
                     agent.optimize()
                 timestep = 0
 
-            if time.time() > hard_stop:
-                done = True
+            if use_timer:
+                if time.time() > hard_stop:
+                    done = True
 
         gui_episodes.value = episode
 
@@ -394,10 +397,12 @@ def run(render_game, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_
         score_per_episode.append(int(info['score']))
         epsilon_history.append(agent.epsilon)
 
+        # Saves model if the current episode's reward is the highest in the current training session
         if ep_reward > best_reward:
-            log_message= f"{datetime.now()}: New best reward: {ep_reward:0.2f} at episode {episode}"
+            log_message= f"{datetime.now().strftime('%H:%M:%S')}: New best reward: {ep_reward:0.2f} at episode {episode}"
             gui_child_conn.send(log_message)
             print(log_message)
+
             with open(log_file, 'a') as file:
                 file.write(log_message + '\n')
 
@@ -407,15 +412,16 @@ def run(render_game, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_
             with open(data_file, 'w') as file:
                 file.write(str(best_reward))
 
-        if episode % 50 == 0:
-            log_message = f"{datetime.now()}: Episode {episode} complete"
-            gui_child_conn.send(log_message)
-            print(log_message)
-            create_graph(log_dir, ai_model,'rewards', rewards_per_episode, 'episode', 'reward')
-            create_graph(log_dir, ai_model, 'bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
-            create_graph(log_dir, ai_model,'holes', avg_holes_per_episode, 'episode', 'avg. holes')
-            create_graph(log_dir, ai_model,'epsilon', epsilon_history, 'episode', 'epsilon')
-            create_graph(log_dir, ai_model, 'score', score_per_episode, 'episode', 'score')
+
+        log_message = f"{datetime.now().strftime('%H:%M:%S')}: {episode}/{agent.episodes} complete [{time.time() - ep_start_time}/episode]"
+        gui_child_conn.send(log_message)
+        print(log_message)
+        create_graph(log_dir, ai_model,'rewards', rewards_per_episode, 'episode', 'reward')
+        # Graphs used for testing
+        #create_graph(log_dir, ai_model, 'bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
+        #create_graph(log_dir, ai_model,'holes', avg_holes_per_episode, 'episode', 'avg. holes')
+        #create_graph(log_dir, ai_model,'epsilon', epsilon_history, 'episode', 'epsilon')
+        #create_graph(log_dir, ai_model, 'score', score_per_episode, 'episode', 'score')
 
     env.close()
 
@@ -425,17 +431,3 @@ def run(render_game, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_
     print(log_message)
     with open(log_file, 'a') as file:
         file.write(log_message + '\n')
-
-if __name__ == '__main__':
-    args = sys.argv
-    if '--render' in args:
-        render = True
-    else:
-        render = False
-
-    if '--best-model' in args:
-        model = 'models/best.pt'
-    else:
-        model = 'models/tetris.pt'
-
-    run(render_game=render, ai_model=model)

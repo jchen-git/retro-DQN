@@ -31,7 +31,7 @@ class Agent:
         self.mini_batch_size = hyperparam['mini_batch_size']       # Size of training data set to be sampled from replay memory
         self.learning_rate = hyperparam['learning_rate']           # Learning rate for training
         self.GAMMA = hyperparam['GAMMA']                           # Discount factor gamma for DQN algorithm
-        self.epoch = hyperparam['epoch']                           # Amount of games to train for
+        self.episodes = hyperparam['episodes']                     # Number of game sessions to use as training
         self.TAU = hyperparam['TAU']                               # TAU value for soft updating the networks
         self.bumpiness_weight = hyperparam['bumpiness_weight']
         self.agg_height_weight = hyperparam['agg_height_weight']
@@ -92,7 +92,7 @@ class Agent:
         self.optimizer.step()
         self.soft_update()
 
-    # Chooses an action using Epsilon-Greedy algorithm
+    # Chooses an action using Epsilon-Greedy algorithm and the action list with the highest Q value is returned
     # Input:  List of (actions, state) pairs that are the possible end states at the current state of the game
     # Output: Returns the (actions, state) pair with the highest Q-value based on the policy network's prediction
     #         Returns a random (actions, state) pair if random.random() is less than epsilon
