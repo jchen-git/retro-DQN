@@ -257,6 +257,11 @@ def run(ai_model, model_dir, child_done_conn, gui_log_conn):
             child_done_conn.send('error')
             gui_log_conn.send('Error: The selected model does not contain model data.')
             return
+        except RuntimeError:
+            child_done_conn.send('error')
+            gui_log_conn.send('Error: The number of hidden layers in the model file does not match the number of hidden '
+                              'layers in the hyperparameters.')
+            return
 
     env.reset()
     obs = env.ram
@@ -269,7 +274,7 @@ def run(ai_model, model_dir, child_done_conn, gui_log_conn):
     can_move = True
 
     while not done:
-        ___, rew, done, info = env.step(5)
+        ___, rew, done, info = env.step(0)
         env.render()
         obs = env.ram
 

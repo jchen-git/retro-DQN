@@ -1,19 +1,19 @@
 tetris:
   GAMMA: 0.95
   TAU: 0.0001
-  agg_height_weight: -0.2195
-  bumpiness_weight: -0.2866
+  agg_height_weight: 0.0
+  bumpiness_weight: 0.0
   env_id: Tetris-Nes
-  episodes: 1200
+  episodes: 300
   epsilon_decay: 0.9995
-  epsilon_init: 0.0213
+  epsilon_init: 0.0
   epsilon_min: 0.01
   hidden_layers: 256
   hole_weight: -0.378
   learning_rate: 0.0002
-  line_clear_weight: 0.8354
-  log_dir: 
+  line_clear_weight: 0.0
+  log_dir: E:/Capstone-Project/retro-DQN/logs
   mini_batch_size: 64
-  model_dir: 
+  model_dir: E:/Capstone-Project/retro-DQN/models
   replay_memory_size: 30000
   update_rate: 100

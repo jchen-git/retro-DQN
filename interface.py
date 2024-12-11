@@ -8,31 +8,6 @@ import tetrisDQN_play
 import tetrisDQN_train
 import yaml
 
-# TODO
-# - More of what is shown in mockup
-#   - Done
-# - Connect buttons to scripts
-#   - Done
-# - Ability to save settings
-#   - Done
-# - Make training end properly instead of hanging on 99% and stop button still showing after completion
-#   - Fixed by creating a new pipe and using it to send a done signal
-# - Add more hyperparameters to the settings menu
-#   - Done
-# - Add feature to disable rendering
-#   - Done
-# - Add feature to create models with a specific name
-#   - Done
-# - Add feature to delete model
-# - Remember to remove private data from hyperparameters.yaml
-# - Test training using new empty .pt file
-#   - Done
-# - Test CUDA out of memory error
-# - Change logging datetime
-# - Separate output box and app state text
-# - Implement setting to set hard stop to episode
-#   - Fix UI for this
-
 class RetroDQNInterface(QDialog):
     def __init__(self, parent=None):
         super(RetroDQNInterface, self).__init__(parent)
@@ -116,7 +91,8 @@ class RetroDQNInterface(QDialog):
         episode_slider.valueChanged.connect(self.episode_slider_input.setValue)
         self.episode_slider_input.setValue(int(hyperparam['episodes']))
 
-        self.episode_timer_toggle = QCheckBox("Use Episode Timer")
+        self.episode_timer_toggle = QCheckBox("Use Episode Timer (Seconds)")
+        self.episode_timer_toggle.setChecked(True)
         episode_timer_label = QLabel("Episode Timer:")
         self.episode_timer_input = QSpinBox()
         self.episode_timer_input.setRange(0, 600)
@@ -135,8 +111,8 @@ class RetroDQNInterface(QDialog):
         quick_setting_layout.addWidget(episode_slider, 2, 0, 1, 2)
         quick_setting_layout.addWidget(episode_timer_label, 3, 0)
         quick_setting_layout.addWidget(self.episode_timer_toggle, 3, 1)
-        quick_setting_layout.addWidget(self.episode_timer_slider, 4, 0)
-        quick_setting_layout.addWidget(self.episode_timer_input, 4, 1)
+        quick_setting_layout.addWidget(self.episode_timer_slider, 4, 0, 1, 2)
+        quick_setting_layout.addWidget(self.episode_timer_input, 4, 2)
         quick_setting_layout.setColumnStretch(1, 1)
         quick_setting_tab.setLayout(quick_setting_layout)
 
@@ -416,14 +392,14 @@ class RetroDQNInterface(QDialog):
         self.run_model_button.setDisabled(True)
         self.new_model_button.setDisabled(True)
         self.p2 = Process(target=tetrisDQN_train.run, args=(self.render_checkbox.isChecked(),
-                                                            self.episode_timer_toggle.isChecked(),
+                                                            self.episode_timer_input.value(),
                                                             self.models_combo_box.currentText(),
                                                             self.model_dir_text_box.text(),
                                                             self.log_dir_text_box.text(),
                                                             self.training_episodes,
                                                             self.child_done_conn,
                                                             self.child_conn,
-                                                            self.episode_timer_input.value()))
+                                                            self.episode_timer_toggle.isChecked()))
         self.p2.daemon = True
         self.p2.start()
         self.t1 = QTimer()
@@ -459,14 +435,33 @@ class RetroDQNInterface(QDialog):
     def training_listen(self):
         self.training_prog_bar.setValue(int(self.training_episodes.value))
         if self.parent_done_conn.poll():
-            if self.parent_done_conn.recv():
+            run_state = self.parent_done_conn.recv()
+            if run_state == 'done':
                 self.t1.stop()
                 self.t2.stop()
                 self.kill_training()
 
+                if self.parent_conn.poll():
+                    msg = QMessageBox()
+                    msg.setWindowTitle('Score')
+                    msg.setText(self.parent_conn.recv())
+                    msg.exec()
+
+            elif run_state == 'error':
+                self.t1.stop()
+                self.t2.stop()
+                self.kill_training()
+
+                if self.parent_conn.poll():
+                    msg = QMessageBox()
+                    msg.setWindowTitle('Error')
+                    msg.setText(self.parent_conn.recv())
+                    msg.exec()
+
     def training_log_listen(self):
         if self.parent_conn.poll():
             self.output_box.append(self.parent_conn.recv())
+            self.output_box.verticalScrollBar().setValue(self.output_box.verticalScrollBar().maximum())
 
     def new_model(self):
         self.run_model_button.setDisabled(True)
@@ -639,11 +634,11 @@ class RetroDQNInterface(QDialog):
 
     def toggle_episode_timer(self):
         if self.episode_timer_toggle.isChecked():
-            self.episode_timer_input.setDisabled(True)
-            self.episode_timer_slider.setDisabled(True)
-        else:
             self.episode_timer_input.setDisabled(False)
             self.episode_timer_slider.setDisabled(False)
+        else:
+            self.episode_timer_input.setDisabled(True)
+            self.episode_timer_slider.setDisabled(True)
 
     def changeStyle(self, styleName):
         QApplication.setStyle(QStyleFactory.create(styleName))
