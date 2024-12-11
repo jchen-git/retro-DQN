@@ -2,6 +2,7 @@ import os
 import gym_tetris
 import torch
 import sys
+import time
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -245,7 +246,7 @@ def get_high_low(curr_board):
     return max_h - min_h
 ##
 
-def create_graph(directory, name, variable, x_label, y_label):
+def create_graph(directory, model_name, metric, variable, x_label, y_label):
     # Save plots
     fig = plt.figure(1)
     durations_t = torch.tensor(variable, dtype=torch.float)
@@ -259,7 +260,7 @@ def create_graph(directory, name, variable, x_label, y_label):
         plt.plot(means.numpy())
 
     # Save plots
-    fig.savefig(os.path.join(directory, f'_{name}.png'))
+    fig.savefig(os.path.join(directory, f'{model_name}_{metric}.png'))
     plt.close(fig)
 
 # Set path for custom ROMs
@@ -267,12 +268,15 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 matplotlib.use('Agg')
 
-def run(render_game, ai_model):
+def run(render_game, ep_time, ai_model, model_dir, log_dir, gui_episodes, gui_child_done_conn, gui_child_conn, use_timer):
     # Tetris game
     env = gym_tetris.make("TetrisA-v3")
     env = JoypadSpace(env, SIMPLE_MOVEMENT)
     INPUT_SHAPE = 5
     is_training = True
+    model_file = os.path.join(model_dir, f'{ai_model}')
+    log_file = os.path.join(log_dir, f'{ai_model}.log')
+    data_file = os.path.join(log_dir, f'{ai_model}.dat')
     agent = Agent(INPUT_SHAPE,"tetris", is_training)
 
     # Logging variables
@@ -286,24 +290,26 @@ def run(render_game, ai_model):
     best_reward = -999.0
     timestep = 0
 
-    log_message=f"{datetime.now()}: Training..."
+    log_message=f"{datetime.now().strftime('%H:%M:%S')}: Training..."
     print(log_message)
-    with open(agent.LOG_FILE, 'w') as file:
+    with open(log_file, 'w') as file:
         file.write(log_message + '\n')
 
-    if os.path.isfile(agent.DATA_FILE):
-        with open(agent.DATA_FILE, 'r') as file:
+    if os.path.isfile(data_file):
+        with open(data_file, 'r') as file:
             best_reward = float(file.read())
     else:
-        with open(agent.DATA_FILE, 'w') as file:
+        with open(data_file, 'w') as file:
             file.write(str(best_reward))
 
-    if os.path.isfile(ai_model):
-        agent.policy_net.load_state_dict(torch.load(ai_model, weights_only=True, map_location=device))
-    elif os.path.isfile(agent.MODEL_FILE):
-        agent.policy_net.load_state_dict(torch.load(agent.MODEL_FILE, weights_only=True, map_location=device))
+    if os.path.isfile(model_file):
+        if os.path.getsize(model_file) != 0:
+            agent.policy_net.load_state_dict(torch.load(model_file, weights_only=True, map_location=device))
 
-    for episode in range(agent.epoch):
+    for episode in range(agent.episodes):
+        if use_timer:
+            hard_stop = time.time() + ep_time
+        ep_start_time = time.time()
         env.reset()
         obs = env.ram
         board = np.array(obs[0x0400:0x04C8].reshape((20, 10)))
@@ -322,6 +328,7 @@ def run(render_game, ai_model):
 
         while not done:
             ___, rew, done, info = env.step(5)
+
             if render_game:
                 env.render()
             obs = env.ram
@@ -356,7 +363,10 @@ def run(render_game, ai_model):
 
             # 0x0048 refers to the current Tetris game phase. > 5 is during the score counter update
             if obs[0x0048] > 5 and not can_move:
-                rew -= state[3] * 0.035
+                rew += state[0] * agent.line_clear_weight
+                rew += state[1] * agent.bumpiness_weight
+                rew += state[2] * agent.agg_height_weight
+                rew += state[3] * agent.hole_weight
 
                 actions = torch.tensor(actions, device=device, dtype=torch.int64)
                 state = torch.tensor([state], device=device, dtype=torch.float)
@@ -373,6 +383,12 @@ def run(render_game, ai_model):
                     agent.optimize()
                 timestep = 0
 
+            if use_timer:
+                if time.time() > hard_stop:
+                    done = True
+
+        gui_episodes.value = episode
+
         # Logging variables to save to an image
         avg_bump_per_episode.append(sum(ep_bump) / len(ep_bump))
         avg_holes_per_episode.append(sum(ep_holes) / len(ep_holes))
@@ -381,44 +397,37 @@ def run(render_game, ai_model):
         score_per_episode.append(int(info['score']))
         epsilon_history.append(agent.epsilon)
 
+        # Saves model if the current episode's reward is the highest in the current training session
         if ep_reward > best_reward:
-            log_message= f"{datetime.now()}: New best reward: {ep_reward:0.2f} at episode {episode}"
+            log_message= f"{datetime.now().strftime('%H:%M:%S')}: New best reward: {ep_reward:0.2f} at episode {episode}"
+            gui_child_conn.send(log_message)
             print(log_message)
-            with open(agent.LOG_FILE, 'a') as file:
+
+            with open(log_file, 'a') as file:
                 file.write(log_message + '\n')
 
-            torch.save(agent.policy_net.state_dict(), agent.MODEL_FILE)
+            torch.save(agent.policy_net.state_dict(), model_file)
             best_reward = ep_reward
 
-            with open(agent.DATA_FILE, 'w') as file:
+            with open(data_file, 'w') as file:
                 file.write(str(best_reward))
 
-        if episode % 50 == 0:
-            log_message = f"{datetime.now()}: Episode {episode} complete"
-            print(log_message)
-            create_graph(agent.GRAPH_FILE, 'rewards', rewards_per_episode, 'episode', 'reward')
-            create_graph(agent.GRAPH_FILE, 'bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
-            create_graph(agent.GRAPH_FILE, 'holes', avg_holes_per_episode, 'episode', 'avg. holes')
-            create_graph(agent.GRAPH_FILE, 'epsilon', epsilon_history, 'episode', 'epsilon')
-            create_graph(agent.GRAPH_FILE, 'score', score_per_episode, 'episode', 'score')
+
+        log_message = f"{datetime.now().strftime('%H:%M:%S')}: {episode}/{agent.episodes} complete [{time.time() - ep_start_time}/episode]"
+        gui_child_conn.send(log_message)
+        print(log_message)
+        create_graph(log_dir, ai_model,'rewards', rewards_per_episode, 'episode', 'reward')
+        # Graphs used for testing
+        #create_graph(log_dir, ai_model, 'bumpiness', avg_bump_per_episode, 'episode', 'avg. bumpiness')
+        #create_graph(log_dir, ai_model,'holes', avg_holes_per_episode, 'episode', 'avg. holes')
+        #create_graph(log_dir, ai_model,'epsilon', epsilon_history, 'episode', 'epsilon')
+        #create_graph(log_dir, ai_model, 'score', score_per_episode, 'episode', 'score')
 
     env.close()
 
+    gui_child_done_conn.send(True)
+
     log_message=f"{datetime.now()}: Training Complete"
     print(log_message)
-    with open(agent.LOG_FILE, 'a') as file:
+    with open(log_file, 'a') as file:
         file.write(log_message + '\n')
-
-if __name__ == '__main__':
-    args = sys.argv
-    if '--render' in args:
-        render = True
-    else:
-        render = False
-
-    if '--best-model' in args:
-        model = 'models/best.pt'
-    else:
-        model = 'models/tetris.pt'
-
-    run(render_game=render, ai_model=model)

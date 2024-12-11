@@ -1,12 +1,6 @@
 /venv
 /.idea
-requirements.txt.bak
 /__pycache__
 /logs
-custom_integrations/Tetris-Nes/scenario_bot4rows_backup.json
-custom_integrations/Tetris-Nes/scenario_row11_backup.json
-custom_integrations/Tetris-Nes/scenario_row19check.json
-playback/test.bk2
-playback/Tetris-Nes-level9_1-000000.bk2
-playback/Tetris-Nes-level9_1-000000.mp4
-playback/Tetris-Nes-level9_2-000000.bk2
+/models
+hyperparameters.yaml
