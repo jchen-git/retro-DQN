@@ -304,7 +304,18 @@ def run(render_game, ep_time, ai_model, model_dir, log_dir, gui_episodes, gui_ch
 
     if os.path.isfile(model_file):
         if os.path.getsize(model_file) != 0:
-            agent.policy_net.load_state_dict(torch.load(model_file, weights_only=True, map_location=device))
+            try:
+                agent.policy_net.load_state_dict(torch.load(model_file, weights_only=True, map_location=device))
+            except EOFError:
+                gui_child_done_conn.send('error')
+                gui_child_conn.send('Error: The selected model does not contain model data.')
+                return
+            except RuntimeError:
+                gui_child_done_conn.send('error')
+                gui_child_conn.send(
+                    'Error: The number of hidden layers in the model file does not match the number of hidden '
+                    'layers in the hyperparameters.')
+                return
 
     for episode in range(agent.episodes):
         if use_timer:
@@ -413,7 +424,7 @@ def run(render_game, ep_time, ai_model, model_dir, log_dir, gui_episodes, gui_ch
                 file.write(str(best_reward))
 
 
-        log_message = f"{datetime.now().strftime('%H:%M:%S')}: {episode}/{agent.episodes} complete [{time.time() - ep_start_time}/episode]"
+        log_message = f"{datetime.now().strftime('%H:%M:%S')}: {episode}/{agent.episodes} complete [{round(time.time() - ep_start_time, 3)}s]"
         gui_child_conn.send(log_message)
         print(log_message)
         create_graph(log_dir, ai_model,'rewards', rewards_per_episode, 'episode', 'reward')
