@@ -475,6 +475,7 @@ class RetroDQNInterface(QDialog):
     def training_log_listen(self):
         if self.parent_conn.poll():
             self.output_box.append(self.parent_conn.recv())
+            self.output_box.verticalScrollBar().setValue(self.output_box.verticalScrollBar().maximum())
 
     # Creates an empty .pt file with the name chosen by the user
     # Sets save directory to the model directory chosen by the user. Else, the default save directory is in the
