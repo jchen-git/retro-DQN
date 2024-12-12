@@ -6,7 +6,7 @@ tetris:
   env_id: Tetris-Nes
   episodes: 300
   epsilon_decay: 0.9995
-  epsilon_init: 0.01
+  epsilon_init: 1.0
   epsilon_min: 0.01
   hidden_layers: 256
   hole_weight: -0.378
