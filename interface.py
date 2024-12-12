@@ -1,8 +1,8 @@
 from os import walk
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (QApplication, QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-                             QProgressBar, QPushButton, QSizePolicy, QSlider, QSpinBox, QStyleFactory, QTabWidget,
-                             QTextEdit, QVBoxLayout, QWidget, QDoubleSpinBox, QFileDialog, QMessageBox, QCheckBox)
+                             QProgressBar, QPushButton, QSizePolicy, QSlider, QSpinBox, QTabWidget, QTextEdit,
+                             QVBoxLayout, QWidget, QDoubleSpinBox, QFileDialog, QMessageBox, QCheckBox)
 from multiprocessing import Process, Value, Pipe
 import tetrisDQN_play
 import tetrisDQN_train
@@ -27,7 +27,6 @@ class RetroDQNInterface(QDialog):
         self.setLayout(mainLayout)
 
         self.setWindowTitle("Retro DQN")
-        self.changeStyle('Windows11')
 
     def create_menu_tabs(self):
         with open('hyperparameters.yaml', 'r') as file:
@@ -45,6 +44,7 @@ class RetroDQNInterface(QDialog):
         self.menu_tab_widget.setFixedWidth(560)
         training_layout = QHBoxLayout()
         training_tab = QWidget()
+        self.output_state_text = QLabel("Ready")
         self.output_box = QTextEdit()
         self.output_box.setText("Ready")
 
@@ -67,33 +67,28 @@ class RetroDQNInterface(QDialog):
         quick_setting_tab = QWidget()
         quick_setting_widget.addTab(quick_setting_tab, "Quick Settings")
 
-        styleComboBox = QComboBox()
-        styleComboBox.addItems(QStyleFactory.keys())
-
-        styleLabel = QLabel("Style:")
-        styleLabel.setBuddy(styleComboBox)
-
-        styleComboBox.textActivated.connect(self.changeStyle)
-
         self.models = self.get_models()
         self.models_combo_box = QComboBox()
         self.models_combo_box.addItems(self.models.keys())
 
-        modelsLabel = QLabel("Checkpoint:")
+        modelsLabel = QLabel("Checkpoint")
         modelsLabel.setBuddy(self.models_combo_box)
 
-        episode_slider_label = QLabel("Episodes:")
+        episode_slider_label = QLabel("Episodes")
         self.episode_slider_input = QSpinBox()
         self.episode_slider_input.setRange(0, 9999)
         episode_slider = QSlider(Qt.Orientation.Horizontal)
         episode_slider.setRange(0, 9999)
         self.episode_slider_input.valueChanged.connect(episode_slider.setValue)
         episode_slider.valueChanged.connect(self.episode_slider_input.setValue)
-        self.episode_slider_input.setValue(int(hyperparam['episodes']))
+        self.episode_slider_input.setValue(hyperparam['episodes'])
 
+        # Episode Timer Setting
+        # If the toggle widget is checked, the training session uses a x second timer to stop the current episode
+        # and move to the next episode
         self.episode_timer_toggle = QCheckBox("Use Episode Timer (Seconds)")
         self.episode_timer_toggle.setChecked(True)
-        episode_timer_label = QLabel("Episode Timer:")
+        episode_timer_label = QLabel("Episode Timer")
         self.episode_timer_input = QSpinBox()
         self.episode_timer_input.setRange(0, 600)
         self.episode_timer_slider = QSlider(Qt.Orientation.Horizontal)
@@ -103,6 +98,7 @@ class RetroDQNInterface(QDialog):
         self.episode_timer_toggle.clicked.connect(self.toggle_episode_timer)
         self.episode_timer_input.setValue(60)
 
+        # Quick setting menu layout
         quick_setting_layout = QGridLayout()
         quick_setting_layout.addWidget(modelsLabel, 0, 0)
         quick_setting_layout.addWidget(self.models_combo_box, 0, 1)
@@ -111,18 +107,22 @@ class RetroDQNInterface(QDialog):
         quick_setting_layout.addWidget(episode_slider, 2, 0, 1, 2)
         quick_setting_layout.addWidget(episode_timer_label, 3, 0)
         quick_setting_layout.addWidget(self.episode_timer_toggle, 3, 1)
-        quick_setting_layout.addWidget(self.episode_timer_slider, 4, 0, 1, 2)
         quick_setting_layout.addWidget(self.episode_timer_input, 4, 2)
+        quick_setting_layout.addWidget(self.episode_timer_slider, 4, 0, 1, 2)
         quick_setting_layout.setColumnStretch(1, 1)
         quick_setting_tab.setLayout(quick_setting_layout)
 
         # Top half of the GUI
         # Contains output box, run training, and run model buttons
         output_layout = QVBoxLayout()
+        output_layout.addWidget(self.output_state_text)
         output_layout.addWidget(self.output_box)
         output_layout.addStretch(1)
         output_group_box.setLayout(output_layout)
 
+        # Layout for the top right menu
+        # Contains buttons for the user to create a new model, start training, use an existing model to play the game,
+        # and the toggle the setting for rendering the training session
         button_layout = QVBoxLayout()
         button_layout.addWidget(self.new_model_button)
         button_layout.addWidget(self.start_training_button)
@@ -131,7 +131,7 @@ class RetroDQNInterface(QDialog):
         button_layout.addStretch(1)
         buttons_group_box.setLayout(button_layout)
 
-        # Add the widgets to the main menu grid
+        # Layout that contains the widgets for the training tab
         training_tab_grid = QGridLayout()
         training_tab_grid.addLayout(training_layout, 0, 0, 1, 2)
         training_tab_grid.addWidget(output_group_box, 1, 0)
@@ -150,12 +150,13 @@ class RetroDQNInterface(QDialog):
         apply_settings_layout.addWidget(apply_settings_button)
         apply_settings_group_box.setLayout(apply_settings_layout)
 
+        # Settings for all the hyperparameters chosen to let the user freely change
         hyperparam_group_box = QGroupBox("")
         hyperparam_grid_layout = QGridLayout()
         hyperparam_label = QLabel("Hyperparameters")
         hyperparam_val_label = QLabel("Value")
 
-        # Reinforcement Learning Weights
+        # UI for adjusting the weight for the reward given by the number of holes in the current board
         hole_weight_label = QLabel("Holes")
         self.hole_weight_slider = QSlider(Qt.Orientation.Horizontal)
         self.hole_weight_input = QDoubleSpinBox()
@@ -167,6 +168,7 @@ class RetroDQNInterface(QDialog):
         self.hole_weight_slider.valueChanged['int'].connect(self.convert_hole_weight_slider)
         self.hole_weight_input.setValue(float(hyperparam['hole_weight']))
 
+        # UI for adjusting the weight for the reward given by the aggregate height of the current board
         agg_height_label = QLabel("Aggregate Height")
         self.agg_height_slider = QSlider(Qt.Orientation.Horizontal)
         self.agg_height_input = QDoubleSpinBox()
@@ -178,6 +180,7 @@ class RetroDQNInterface(QDialog):
         self.agg_height_slider.valueChanged['int'].connect(self.convert_agg_height_slider)
         self.agg_height_input.setValue(float(hyperparam['agg_height_weight']))
 
+        # UI for adjusting the weight for the reward given by the bumpiness of the current board
         bump_label = QLabel("Bumpiness")
         self.bump_slider = QSlider(Qt.Orientation.Horizontal)
         self.bump_input = QDoubleSpinBox()
@@ -189,6 +192,7 @@ class RetroDQNInterface(QDialog):
         self.bump_slider.valueChanged['int'].connect(self.convert_bump_slider)
         self.bump_input.setValue(float(hyperparam['bumpiness_weight']))
 
+        # UI for adjusting the weight for the reward given by the number of line clears of an upcoming state
         line_clear_label = QLabel("Line Clear")
         self.line_clear_slider = QSlider(Qt.Orientation.Horizontal)
         self.line_clear_input = QDoubleSpinBox()
@@ -276,6 +280,7 @@ class RetroDQNInterface(QDialog):
         self.learning_rate_slider.valueChanged['int'].connect(self.convert_learning_rate_slider)
         self.learning_rate_input.setValue(float(hyperparam['learning_rate']))
 
+        # Layout for the hyperparameters
         hyperparam_group_box.setLayout(hyperparam_grid_layout)
 
         hyperparam_grid_layout.addWidget(hyperparam_label, 0, 0, Qt.AlignmentFlag.AlignTop)
@@ -321,6 +326,7 @@ class RetroDQNInterface(QDialog):
         hyperparam_grid_layout.addWidget(self.learning_rate_slider, 10, 1, Qt.AlignmentFlag.AlignTop)
         hyperparam_grid_layout.addWidget(self.learning_rate_input, 10, 2, Qt.AlignmentFlag.AlignTop)
 
+        # UI for the model directory. Allows the user to select a directory via a file dialog.
         model_dir_group_box = QGroupBox("")
         model_dir_label = QLabel("Models Directory")
         model_dir_grid_layout = QGridLayout()
@@ -334,6 +340,7 @@ class RetroDQNInterface(QDialog):
         model_dir_grid_layout.addWidget(model_dir_browse_button, 1, 1)
         model_dir_group_box.setLayout(model_dir_grid_layout)
 
+        # UI for the log directory. Allows the user to select a directory for the log folder via a file dialog.
         log_dir_group_box = QGroupBox("")
         log_dir_label = QLabel("Logs Directory")
         log_dir_grid_layout = QGridLayout()
@@ -347,6 +354,7 @@ class RetroDQNInterface(QDialog):
         log_dir_grid_layout.addWidget(log_dir_browse_button, 1, 1)
         log_dir_group_box.setLayout(log_dir_grid_layout)
 
+        # Layout for the settings tab
         settings_tab = QWidget()
         settings_tab_grid = QGridLayout()
         settings_tab_grid.addWidget(apply_settings_group_box, 0, 0)
@@ -358,8 +366,14 @@ class RetroDQNInterface(QDialog):
         self.menu_tab_widget.addTab(training_tab, "Training")
         self.menu_tab_widget.addTab(settings_tab, "Settings")
 
+    # Uses the model selected by the user to play a game of tetris.
+    # Applies current settings to the hyperparameter file, updates output texts to inform user of what's happening,
+    # updates UI information to allow user to stop the current action, prevents user from creating a new model and
+    # running a training session, starts a process to run the game while the interface is still active, and starts a
+    # timer that tracks the done state of the game by using pipes.
     def run_agent(self):
         self.quick_apply_settings()
+        self.output_state_text.setText("In progress...")
         self.output_box.setText("Using model to run agent...")
         self.run_model_button.setText("Stop")
         self.run_model_button.clicked.disconnect()
@@ -378,9 +392,16 @@ class RetroDQNInterface(QDialog):
         self.run_t1.timeout.connect(self.run_model_listen)
         self.run_t1.start(100)
 
+    # Uses the model selected by the user to begin a training session.
+    # Applies current settings to the hyperparameter file, updates output texts to inform user of what's happening,
+    # updates UI information to allow user to stop the current action, prevents user from creating a new model and
+    # from using a model to play, starts a process to train the model while the interface is still active, starts a
+    # timer that tracks the done state of the game by using pipes, starts a timer that updates the output box with
+    # training information by using pipes.
     def run_training(self):
         self.quick_apply_settings()
         self.training_prog_bar.setRange(0, int(self.episode_slider_input.value()))
+        self.output_state_text.setText("In progress...")
         self.output_box.setText("Training in progress...")
         self.training_prog_bar.setValue(0)
         self.training_episodes = Value('i', 0)
@@ -409,6 +430,12 @@ class RetroDQNInterface(QDialog):
         self.t2.timeout.connect(self.training_log_listen)
         self.t2.start(500)
 
+    # Listens to the pipes set up by the run_agent function
+    # Checks if there is new data in the pipes. If there is new data, check if the state is 'done' or 'error'. If the
+    # state is 'done', we stop the timer in run_agent and kill the process that contains the game. After that, we check
+    # if the run_parent_conn pipe has any new data. If there is new data, we create a message box containing the score
+    # obtained by the model. We do the same process for the 'error' state but we create a message box containing the
+    # error raised by the game.
     def run_model_listen(self):
         if self.run_parent_done_conn.poll():
             run_state = self.run_parent_done_conn.recv()
@@ -432,37 +459,26 @@ class RetroDQNInterface(QDialog):
                     msg.setText(self.run_parent_conn.recv())
                     msg.exec()
 
+    # Listens to the parent_done_conn pipe setup by run_training.
+    # Updates the progress bar UI to the current episode that the training session is on. If the parent_done_conn
+    # receives True, we stop both timers setup in run_training and kill the training process.
     def training_listen(self):
         self.training_prog_bar.setValue(int(self.training_episodes.value))
         if self.parent_done_conn.poll():
-            run_state = self.parent_done_conn.recv()
-            if run_state == 'done':
+            if self.parent_done_conn.recv():
                 self.t1.stop()
                 self.t2.stop()
                 self.kill_training()
 
-                if self.parent_conn.poll():
-                    msg = QMessageBox()
-                    msg.setWindowTitle('Score')
-                    msg.setText(self.parent_conn.recv())
-                    msg.exec()
-
-            elif run_state == 'error':
-                self.t1.stop()
-                self.t2.stop()
-                self.kill_training()
-
-                if self.parent_conn.poll():
-                    msg = QMessageBox()
-                    msg.setWindowTitle('Error')
-                    msg.setText(self.parent_conn.recv())
-                    msg.exec()
-
+    # Listens to the parent_conn pipe setup by run_training
+    # Updates the output box with the logging data created in tetrisDQN_train.py.
     def training_log_listen(self):
         if self.parent_conn.poll():
             self.output_box.append(self.parent_conn.recv())
-            self.output_box.verticalScrollBar().setValue(self.output_box.verticalScrollBar().maximum())
 
+    # Creates an empty .pt file with the name chosen by the user
+    # Sets save directory to the model directory chosen by the user. Else, the default save directory is in the
+    # current directory that interface.py is in.
     def new_model(self):
         self.run_model_button.setDisabled(True)
         self.start_training_button.setDisabled(True)
@@ -479,6 +495,8 @@ class RetroDQNInterface(QDialog):
         self.run_model_button.setDisabled(False)
         self.start_training_button.setDisabled(False)
 
+    # Checks all files in the models directory and creates a dictionary containing the files that end in .pt
+    # Returns the checkpoints found in the models folder
     def get_models(self):
         files_in_dir = next(walk("models"), (None, None, []))
         path = files_in_dir[0]
@@ -488,22 +506,28 @@ class RetroDQNInterface(QDialog):
                 ckpts[file] = (path + f"/{file}")
         return ckpts
 
+    # Stops the run_agent process
+    # Resets the UI to the 'Ready' state and kills the run_agent process and joins it to the main process.
     def kill_run_agent(self):
         self.run_model_button.setText("Run Model")
         self.run_model_button.clicked.disconnect()
         self.run_model_button.clicked.connect(self.run_agent)
         self.p.terminate()
         self.p.join(timeout=1)
+        self.output_state_text.setText("Ready")
         self.output_box.setText("Ready")
         self.start_training_button.setDisabled(False)
         self.new_model_button.setDisabled(False)
 
+    # Stops the run_training process
+    # Resets the UI to the 'Ready' state and kills the run_training process and joins it to the main process.
     def kill_training(self):
         self.start_training_button.setText("Start Training")
         self.start_training_button.clicked.disconnect()
         self.start_training_button.clicked.connect(self.run_training)
         self.p2.terminate()
         self.p2.join(timeout=1)
+        self.output_state_text.setText("Ready")
         self.output_box.setText("Ready")
         self.t1.stop()
         self.t2.stop()
@@ -511,6 +535,7 @@ class RetroDQNInterface(QDialog):
         self.run_model_button.setDisabled(False)
         self.new_model_button.setDisabled(False)
 
+    # Saves settings to the hyperparameter.yaml file without creating a message box
     def quick_apply_settings(self):
         with open('hyperparameters.yaml', 'r') as file:
             all_hyperparam_sets = yaml.safe_load(file)
@@ -532,6 +557,8 @@ class RetroDQNInterface(QDialog):
         with open('hyperparameters.yaml', 'w') as file:
             yaml.dump(all_hyperparam_sets, file, default_flow_style=False)
 
+    # Saves settings to the hyperparameter.yaml file and creates a message box to inform the user that the
+    # new hyperparameters have been saved.
     def apply_settings(self):
         with open('hyperparameters.yaml', 'r') as file:
             all_hyperparam_sets = yaml.safe_load(file)
@@ -558,6 +585,7 @@ class RetroDQNInterface(QDialog):
         msg.setText('Settings saved!')
         msg.exec()
 
+    ## Group of methods that converts the QSlider and QDoubleSpinBox values to their proper values
     def convert_epsilon_init_slider(self, val):
         val = float(val/10000)
         self.epsilon_init_input.setValue(val)
@@ -621,17 +649,21 @@ class RetroDQNInterface(QDialog):
     def convert_line_clear_dspin(self, val):
         val = int(val*10000)
         self.line_clear_slider.setValue(val)
+    ##
 
+    # Creates a QFileDialog for the user to select a folder to use as the model folder
     def select_model_dir(self):
         file_dialog = QFileDialog()
         folder_path = file_dialog.getExistingDirectory(None, "Select Folder")
         self.model_dir_text_box.setText(folder_path)
 
+    # Creates a QFileDialog for the user to select a folder to use as the log folder
     def select_log_dir(self):
         file_dialog = QFileDialog()
         folder_path = file_dialog.getExistingDirectory(None, "Select Folder")
         self.log_dir_text_box.setText(folder_path)
 
+    # Enables or disables the other widgets related to the episode timer setting
     def toggle_episode_timer(self):
         if self.episode_timer_toggle.isChecked():
             self.episode_timer_input.setDisabled(False)
@@ -639,13 +671,6 @@ class RetroDQNInterface(QDialog):
         else:
             self.episode_timer_input.setDisabled(True)
             self.episode_timer_slider.setDisabled(True)
-
-    def changeStyle(self, styleName):
-        QApplication.setStyle(QStyleFactory.create(styleName))
-        self.changePalette()
-
-    def changePalette(self):
-        QApplication.setPalette(self.originalPalette)
 
 if __name__ == '__main__':
 
